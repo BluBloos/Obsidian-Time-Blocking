@@ -1,0 +1,10 @@
+{
+    "id": "obsidian-time-blocking",
+    "name": "Obsidian-Time-Blocking",
+    "author": "Noah Cabral",
+    "version": "0.1.0",
+    "minAppVersion": "0.11.13",
+    "description": "Automatic scheduling of TODOs where task ground truth is taken from Tasks plugin.",
+    "authorUrl": "https://github.com/BluBloos/Obsidian-Time-Blocking",
+    "isDesktopOnly": true
+}

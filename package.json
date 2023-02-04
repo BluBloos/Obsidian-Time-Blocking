@@ -1,0 +1,23 @@
+{
+  "name": "obsidian-time-blocking",
+  "version": "0.1.0",
+  "description": "Automatic scheduling of TODOs where task ground truth is taken from Tasks plugin",
+  "main": "build.mjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BluBloos/Obsidian-Time-Blocking.git"
+  },
+  "author": "Noah Cabral",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/BluBloos/Obsidian-Time-Blocking/issues"
+  },
+  "homepage": "https://github.com/BluBloos/Obsidian-Time-Blocking#readme",
+  "dependencies": {
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.17.5"
+  }
+}
