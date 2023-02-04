@@ -11,5 +11,24 @@ The official time blocking plugin for Obsidian.
 - Modifying the schedule is as easy as modifying this plain-text.
 - The automated scheduling goes as far as it needs to into the future to schedule all TODOs.
 - The plugin provides feedbcak for if all TODOs can be completed in time. This is done by using Tasks plugin deadline metadata.
-- We should be able to visualize the time-blocked regions. I either want these to sync back into my calendar app, or I want Obsidian
-app to just give me notifs for blocks.
+- We should be able to visualize the time-blocked regions.
+- Obsidian give me notifs for blocks.
+
+## MVP
+
+- integrating with tasks plugin is a must.
+- output of scheduling is plain-text format in daily notes file.
+- modifying the schedule is as easy as modifying the plain-text.
+- The automated scheduling goes as far as it needs to into the future to schedule all TODOs.
+- App gives me notifs for schedule.
+
+### Maybe
+
+- conider TODO deadlines and tell user if it was scheduled after.
+- don't require a settings page (can just hard-code) but should be easy.
+
+### Drop
+
+- no need to visualize the schedule.
+- no need for iCal integration right now.
+- no need to integrate with Toggl track right now.
