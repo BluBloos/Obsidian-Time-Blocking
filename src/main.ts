@@ -44,12 +44,23 @@ export default class ObsidianTimeBlocking extends Plugin {
    * Hook into Obsidian callbacks to support runtime behaviour of Obsidian-PDF.
    */
   async onload(): Promise<void> {
+
+    console.log("loading Obsidian-Time-Blocking plugin...");
+
     await this.loadSettings();
     // This adds a settings tab so the user can configure various aspects of the plugin
     this.addSettingTab(new ObsidianTimeBlockingSettingTab(this.app, this));
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", (leaf: WorkspaceLeaf) => {})
     );
+
+    let tasks = await this.app.plugins.plugins['obsidian-tasks-plugin'].oneHotResolveQueryToTasks(
+`not done 
+description includes TODO 
+path does not include TODO Template 
+tags include #P1 
+`
+    ).then((tasks) => { console.log(tasks); console.log("done loading Obsidian-Time-Blocking plugin."); });
   }
 
   async loadSettings() {
