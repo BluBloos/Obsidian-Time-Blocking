@@ -18,6 +18,7 @@
   "homepage": "https://github.com/BluBloos/Obsidian-Time-Blocking#readme",
   "dependencies": {
     "builtin-modules": "^3.3.0",
-    "esbuild": "^0.17.5"
+    "esbuild": "^0.17.5",
+    "moment": "^2.29.4"
   }
 }
