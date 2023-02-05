@@ -1,9 +1,6 @@
 import type { Moment } from 'moment/moment';
 import moment from "moment";
 
-// TODO: We need to add to the tasks plugin another piece of metadata for estimated time to complete.
-// This will be part of our priv extension.
-
 const LOCK_SYMBOL: string = "🔒";
 
 class TaskExternal {
@@ -18,33 +15,25 @@ class TaskExternal {
   // TODO: recurring tasks should get sheduled in the calendar as such.
 }
 
-// TODO: Offer more variability in scheduling window size.
-// so, we want more than just scheduleBegin and scheduleEnd.
-// TODO: Add parsing of scheduler object params from the .md
-const tasksFilter =
-  "not done\
-happens before {{2023-02-04}}";
-const padding = 15;
-const scheduleBegin = 60 * 8; // You may schedule after 8 AM. basic arithmetic is supported.
-const scheduleEnd = 60 * 20; // Not past 8 PM
-const viewBegin = "2023-02-04"; // begin is inclusive
-const viewEnd = "2023-02-5"; // the end is exclusive.
-const maxBlockSize = 60; // the unit for these three is always minutes.
-const minBlockSize = 15;
-const blockStepSize = 5; // I always want blocks to be divisible by 5 mins.
-const priorityAlgo = (task: TaskExternal) => {
-  if (task.dueDate) {
-    const timeUntilDue = task.dueDate.diff(moment(), "hours");
-    if (timeUntilDue <= 24) return 1;
-    if (timeUntilDue <= 48) return 2;
-  }
-  if (task.tags.includes("#P1")) return 1;
-  if (task.tags.includes("#P2")) return 2;
-  if (task.tags.includes("#P3")) return 3;
-  return 4;
+enum ScheduleBlockType {
+  TASK,
+  DATE_HEADER
 };
-const floatDeadlines = true; // this setting
-const floatDeadlinesRegion = 60 * 24; // in minutes.
+
+/// this class is a block that the ScheduleAlogrithm outputs.
+/// it is meant to be consumed by the ScheduleWriter for rendering
+/// the schedule.
+class ScheduleBlock {
+  public readonly type: ScheduleBlockType; // the type of block.
+  public readonly text: string;            // the text to be rendered.
+  public readonly startTime: Moment;       // when the block begins.
+
+  constructor(type: ScheduleBlockType, text: string, startTime: Moment) {
+    this.type = type;
+    this.text = text;
+    this.startTime = startTime;
+  }
+}
 
 import {
   App,
@@ -68,6 +57,73 @@ const DEFAULT_SETTINGS: ObsidianTimeBlockingSettings = {
   scheduleEnd: "18:00",
 };
 
+// TODO: maybe in the future we might want to be scheduling more abstract objects.
+// Currently, we are only scheduling a list of TaskExternal.
+class ScheduleAlgorithm {
+  // TODO: Add parsing of scheduler object params from the .md  
+  // ------ SCHEDULE WINDOW ------
+  // TODO: Offer more variability in scheduling window size.
+  // so, we want more than just scheduleBegin and scheduleEnd.
+  // maybe I want many windows, for example.
+  private readonly scheduleBegin = 60 * 8; // You may schedule after 8 AM. basic arithmetic is supported.
+  private readonly scheduleEnd = 60 * 20; // Not past 8 PM
+  // ------ SCHEDULE WINDOW ------
+  // ------ SCHEDULE VIEW ------
+  private readonly viewBegin = "2023-02-04"; // begin is inclusive
+  private readonly viewEnd = "2023-02-5"; // the end is exclusive.
+  // ------ SHCEDULE VIEW ------
+  // ------ SCHEDULING BLOCKS ------
+  private readonly maxBlockSize = 60; // the unit for these three is always minutes.
+  private readonly minBlockSize = 15;
+  private readonly blockStepSize = 5; // I always want blocks to be divisible by 5 mins.
+  // ------ SCHEDULING BLOCKS ------
+  // ------ SCHEDULING ALGORITHM ------
+  // TODO: add break time that user can specify.
+  private readonly padding = 15;
+  private readonly priorityAlgo = (task: TaskExternal) => {
+    if (task.dueDate) {
+      const timeUntilDue = task.dueDate.diff(moment(), "hours");
+      if (timeUntilDue <= 24) return 1;
+      if (timeUntilDue <= 48) return 2;
+    }
+    if (task.tags.includes("#P1")) return 1;
+    if (task.tags.includes("#P2")) return 2;
+    if (task.tags.includes("#P3")) return 3;
+    return 4;
+  };
+  private readonly floatDeadlines = true; // this setting
+  private readonly floatDeadlinesRegion = 60 * 24; // in minutes.
+  // ------ SCHEDULING ALGORITHM ------
+
+  public isEqual(other: ScheduleAlgorithm) {
+    // TODO: two equal schedules are defined as having the same parameters.
+    // because then they will produce the same schedule.
+    return true;
+  }
+
+  public makeSchedule(tasks: TaskExternal[]) : ScheduleBlock[] {
+    // TODO: Currently we use the viewBegin as implicitly the beginning of the window
+    // with which to schedule tasks into.
+    // TODO: We need to add to the tasks plugin another piece of metadata for estimated time to complete.
+    // This will be part of our priv extension.
+    const taskBlockSize = 30; // currently we are just scheduling tasks as 30 minute blocks.
+    let timeCursor = this.scheduleBegin;
+    let blocks: ScheduleBlock[] = [];
+    let dateCursor = moment(this.viewBegin);
+    blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", moment(dateCursor)));
+    for (let task of tasks) {
+      // NOTE: we must call moment on a moment to clone it.
+      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, task.originalMarkdown, moment(dateCursor).add(timeCursor, "minutes")));
+      timeCursor += taskBlockSize;
+      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "BREAK", moment(dateCursor).add(timeCursor, "minutes")));
+      timeCursor += this.padding;
+    }
+    blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN", moment(dateCursor).add(timeCursor, "minutes")));
+    return blocks;
+  }
+
+}
+
 export class ScheduleWriter {
 
   private app: App;
@@ -78,9 +134,13 @@ export class ScheduleWriter {
 
   // TODO: It would be preferred if our plugin could render to a custom ```timeblocking block.
   // as this would ensure data integrity of the rest of the markdown file.
-  async writeSchedule(mv : MarkdownView) {
+  async writeSchedule(mv : MarkdownView, blocks: ScheduleBlock[]) {
     // TODO: The below code is very slow and crude. We need to optimize it. I suspect shlemiel the painter's algorithm is at play here.
     const fileContent = mv.data;
+    if (fileContent === undefined || fileContent === null) {
+      console.log("Obsidian-Time-Blocking: fileContent is undefined|null.");
+      return;
+    }
     const preamble = "# begin timeblocking";
     const EOF = "---";
     const postamble = "# end timeblocking";
@@ -98,28 +158,49 @@ export class ScheduleWriter {
       const textAfter  = textSections[1].slice(oneAfterPreambleEof).split(EOF); // If indexStart >= str.length, an empty string is returned.
       if (textAfter.length > 1) {
         const textAfterPostambleEof = textAfter[1];
-        const scheduleOut = `<pre>
-Monday     08:00 - Task 1
-           09:00 - Task 2
-           10:00 - Task 3
+        let scheduleOut = "<pre><code class=\"language-markdown\">";
+/* Example schedule:
+2023-02-05: 
 
-Tuesday    08:00 - Task 4
-           09:00 - Task 5
-           10:00 - Task 6
+08:00 - Task 1
+09:00 - Task 2
+10:00 - Task 3
 
-Wednesday  08:00 - Task 7
-           09:00 - Task 8
-           10:00 - Task 9
-</pre>`;
+2023-02-06:
+
+08:00 - Task 4
+09:00 - Task 5
+10:00 - Task 6
+
+2023-02-07: 
+
+08:00 - Task 7
+09:00 - Task 8
+10:00 - Task 9
+</pre>*/
+        for (let i = 0; i < blocks.length; i++)
+        {
+          const block = blocks[i];
+          switch(block.type) {
+            case ScheduleBlockType.TASK:
+              scheduleOut += `${block.startTime.format("HH:mm")} - ${block.text}\n`;
+              break;
+            case ScheduleBlockType.DATE_HEADER:
+              scheduleOut += `\n${block.startTime.format("YYYY-MM-DD")}:\n\n`;
+              break;
+          }
+        }
+        scheduleOut += "</code></pre>";
+
         const textToWrite = `${textBefore}${preamble}\n${EOF}\n${scheduleOut}\n${EOF}${textAfterPostambleEof}`;
         this.app.vault.modify(mv.file, textToWrite); 
       } else {
-        console.log("we cannot continue as unable to find postamble section.");
+        console.log("Obsidian-Time-Blocking: we cannot continue as unable to find postamble section.");
       }     
     } else if (textSections.length > 1) {
-      console.log("too many timeblocking sections");
+      console.log("Obsidian-Time-Blocking: too many timeblocking sections");
     } else {
-      console.log("no timeblocking section found");
+      console.log("Obsidian-Time-Blocking: no timeblocking section found");
     }
   }
 };
@@ -128,6 +209,7 @@ export default class ObsidianTimeBlocking extends Plugin {
 
   settings: ObsidianTimeBlockingSettings;
   private scheduleWriter: ScheduleWriter;
+  private scheduleAlgorithm: ScheduleAlgorithm;
 
   async unload(): Promise<void> {
     this.app.workspace.off("active-leaf-change", (leaf: WorkspaceLeaf) => {});
@@ -137,6 +219,7 @@ export default class ObsidianTimeBlocking extends Plugin {
     console.log("loading Obsidian-Time-Blocking plugin...");
 
     this.scheduleWriter = new ScheduleWriter(this.app);
+    this.scheduleAlgorithm = new ScheduleAlgorithm();
 
     await this.loadSettings();
 
@@ -147,7 +230,18 @@ export default class ObsidianTimeBlocking extends Plugin {
       this.app.workspace.on("active-leaf-change", (leaf: WorkspaceLeaf) => {
         if (leaf.view instanceof MarkdownView) {
           console.log("leaf.view",leaf.view);
-          this.scheduleWriter.writeSchedule(leaf.view);
+
+          let tasks = this.app.plugins.plugins["obsidian-tasks-plugin"].oneHotResolveQueryToTasks(
+`not done 
+description includes TODO 
+path does not include TODO Template 
+tags include #P1 
+`
+          ).then((tasks : TaskExternal[]) => {
+            console.log("Obsidian-Time-Blocking: ",tasks);
+            let blocks : ScheduleBlock[] = this.scheduleAlgorithm.makeSchedule(tasks);
+            this.scheduleWriter.writeSchedule(leaf.view, blocks);
+          });
         }
       })
     );
@@ -161,25 +255,14 @@ export default class ObsidianTimeBlocking extends Plugin {
         if (markdownView) {
           if (!checking) {
             // TODO: for now, our plugin will only work with the active note.
-            console.log("note has been registered");
+            console.log("Obsidian-Time-Blocking: note has been registered");
           }
           return true; // show command in pallete.
         }
       },
     });
 
-    let tasks = await this.app.plugins.plugins["obsidian-tasks-plugin"]
-      .oneHotResolveQueryToTasks(
-        `not done 
-description includes TODO 
-path does not include TODO Template 
-tags include #P1 
-`
-      )
-      .then((tasks) => {
-        console.log(tasks);
-        console.log("done loading Obsidian-Time-Blocking plugin.");
-      });
+    console.log("done loading Obsidian-Time-Blocking plugin.");
   }
 
   async loadSettings() {
