@@ -8,6 +8,7 @@ class TaskExternal {
   public readonly priority: number; // 1 is the highest priority, any larger number is a lower priority.
   public readonly tags: string[]; // a list of ASCII tags, distilled from the description.
   public readonly originalMarkdown: string; // the original markdown task.
+  public readonly description: string; // the description of the task.
   public readonly startDate: Moment | null;
   public readonly scheduledDate: Moment | null;
   public readonly dueDate: Moment | null;
@@ -91,6 +92,16 @@ class ScheduleAlgorithm {
     if (task.tags.includes("#P3")) return 3;
     return 4;
   };
+  // TODO: currently we are using the descriptionFilter as a workaround to get P1, P2, P3 tags to "work".
+  // but optimally it looks like we might want to reinvestigate how we render things.
+  // if a ```timeblocking region can do what we want, then maybe we ought to use that.
+  private readonly descriptionFilter = (description: string) => {
+    const cruftRemoved = description.replace("[[TODO]](Noah):  ", "");
+    const tagsBettered = cruftRemoved.replace(/#([a-zA-Z0-9]+)/g, (match : string) => {
+      return `<span style="color:red">${match}</span>`;
+    });
+    return tagsBettered;
+  };
   private readonly floatDeadlines = true; // this setting
   private readonly floatDeadlinesRegion = 60 * 24; // in minutes.
   // ------ SCHEDULING ALGORITHM ------
@@ -113,7 +124,7 @@ class ScheduleAlgorithm {
     blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", moment(dateCursor)));
     for (let task of tasks) {
       // NOTE: we must call moment on a moment to clone it.
-      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, task.originalMarkdown, moment(dateCursor).add(timeCursor, "minutes")));
+      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, this.descriptionFilter(task.description), moment(dateCursor).add(timeCursor, "minutes")));
       timeCursor += taskBlockSize;
       blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "BREAK", moment(dateCursor).add(timeCursor, "minutes")));
       timeCursor += this.padding;
@@ -183,10 +194,10 @@ export class ScheduleWriter {
           const block = blocks[i];
           switch(block.type) {
             case ScheduleBlockType.TASK:
-              scheduleOut += `${block.startTime.format("HH:mm")} - ${block.text}\n`;
+              scheduleOut += `<span style=\"color:yellow\">${block.startTime.format("HH:mm")}</span> - ${block.text}\n`;
               break;
             case ScheduleBlockType.DATE_HEADER:
-              scheduleOut += `\n${block.startTime.format("YYYY-MM-DD")}:\n\n`;
+              scheduleOut += `\n<span style=\"color:yellow\">${block.startTime.format("YYYY-MM-DD")}</span>:\n\n`;
               break;
           }
         }
