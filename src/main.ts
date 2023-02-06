@@ -1,7 +1,11 @@
 import type { Moment } from 'moment/moment';
 import moment from "moment";
 
+// TODO: in the future we want to add a feature to show DONE todos for the purpose
+// of looking at historical schedules.
+
 const LOCK_SYMBOL: string = "🔒";
+const DUE_DATE_SYMBOL: string = "📅";
 
 class TaskExternal {
   public readonly isDone: Boolean;
@@ -71,13 +75,14 @@ class ScheduleAlgorithm {
   private readonly scheduleEnd = 60 * 20; // Not past 8 PM
   // ------ SCHEDULE WINDOW ------
   // ------ SCHEDULE VIEW ------
+  // TODO: actually do something with viewBegin/End. Right now I don't care.
   private readonly viewBegin = "2023-02-04"; // begin is inclusive
   private readonly viewEnd = "2023-02-5"; // the end is exclusive.
   // ------ SHCEDULE VIEW ------
   // ------ SCHEDULING BLOCKS ------
-  private readonly maxBlockSize = 60; // the unit for these three is always minutes.
+  private readonly maxBlockSize = 90; // the unit for these three is always minutes.
   private readonly minBlockSize = 15;
-  private readonly blockStepSize = 5; // I always want blocks to be divisible by 5 mins.
+  private readonly blockStepSize = 5; // I always want blocks to be divisible by 5 mins. this is also an implicit alignment for task begin.
   private readonly defaultBlockSize = 30;
   // ------ SCHEDULING BLOCKS ------
   // ------ SCHEDULING ALGORITHM ------
@@ -98,12 +103,13 @@ class ScheduleAlgorithm {
   // but optimally it looks like we might want to reinvestigate how we render things.
   // if a ```timeblocking region can do what we want, then maybe we ought to use that.
   private readonly descriptionFilter = (description: string) => {
-    const cruftRemoved = description.replace("[[TODO]](Noah):  ", "");
+    const cruftRemoved = description.replace("[[TODO]](Noah):", "");
     const tagsBettered = cruftRemoved.replace(/#([a-zA-Z0-9]+)/g, (match : string) => {
-      return `<span style="color:red">${match}</span>`;
+      return `**${match}**`;
     });
     return tagsBettered;
   };
+  // TODO: Implement this sort of thing as a future feature. don't need for MVP right now.
   private readonly floatDeadlines = true; // this setting
   private readonly floatDeadlinesRegion = 60 * 24; // in minutes.
   // ------ SCHEDULING ALGORITHM ------
@@ -115,19 +121,25 @@ class ScheduleAlgorithm {
   }
 
   public makeSchedule(tasks: TaskExternal[]) : ScheduleBlock[] {
-    // TODO: Currently we use the viewBegin as implicitly the beginning of the window
-    // with which to schedule tasks into.
     // TODO: We need to add to the tasks plugin another piece of metadata for estimated time to complete.
     // This will be part of our priv extension.
-    let timeCursor = this.scheduleBegin;
+    let timeNow = moment();
+    let today = moment(timeNow.format("YYYY-MM-DD"));
+    let alignUp = (from: number, alignment: number) => {
+      return Math.ceil(from / alignment) * alignment;
+    }
+    let timeCursor = alignUp(Math.max(this.scheduleBegin, timeNow.diff(today, "minutes")), this.blockStepSize);
     let blocks: ScheduleBlock[] = [];
-    let dateCursor = moment(this.viewBegin);   
+    let dateCursor = moment(today);
     let insertDateHeader = () => {
       blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", moment(dateCursor)));
     }
     insertDateHeader();
+    // also render task, I suppose.
     let insertTask = (task : TaskExternal) => {
-      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, this.descriptionFilter(task.description), moment(dateCursor).add(timeCursor, "minutes")));
+      let renderDueDate = (task.dueDate) ? ` ${DUE_DATE_SYMBOL} ${task.dueDate.format("YYYY-MM-DD")}` : "";
+      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, 
+        `${this.descriptionFilter(task.description)} ${renderDueDate}`, moment(dateCursor).add(timeCursor, "minutes")));
     }
     let insertBreak = () => {
       blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "BREAK", moment(dateCursor).add(timeCursor, "minutes")));
@@ -137,12 +149,22 @@ class ScheduleAlgorithm {
     let checkBoundary = () => {
       // TODO: currently right now it is possible for us to go over scheduleBound, or "lose" some of a task across the 24 Hour boundary.
       // check if the timeCursor has crossed the boundary of a day.
-      if (timeCursor >= 60 * 24) {
+      if (timeCursor >= this.scheduleEnd) {
         dateCursor.add(1, "days");
         timeCursor = this.scheduleBegin;
         insertDateHeader();
       }
     }
+    // begin by sort the tasks by their priority.
+    //
+    // things with the largest numerical priorities get bubbled to the end of the list,
+    // and hence are scheduled last.
+    tasks.sort((a, b) => {
+      // > 0 means sort a after b.
+      // < 0 means sort a before b.
+      // 0 means leave a and b unchanged.
+      return this.priorityAlgo(a) - this.priorityAlgo(b);
+    });
     for (let task of tasks) {
       // NOTE: we must call moment on a moment to clone it.
       if (task.estimatedTimeToComplete) {
@@ -150,7 +172,7 @@ class ScheduleAlgorithm {
         let times = Math.ceil(task.estimatedTimeToComplete / this.maxBlockSize);
         while (times > 0) {
           insertTask(task);
-          timeCursor += Math.min(this.maxBlockSize, timeLeft);
+          timeCursor += alignUp(Math.max(Math.min(this.maxBlockSize, timeLeft), this.minBlockSize), this.blockStepSize);
           checkBoundary();
           insertBreak();          
           times--;
@@ -203,7 +225,7 @@ export class ScheduleWriter {
       const textAfter  = textSections[1].slice(oneAfterPreambleEof).split(EOF); // If indexStart >= str.length, an empty string is returned.
       if (textAfter.length > 1) {
         const textAfterPostambleEof = textAfter[1];
-        let scheduleOut = "<pre><code class=\"language-markdown\">";
+        let scheduleOut = "```markdown";
 /* Example schedule:
 2023-02-05: 
 
@@ -228,14 +250,14 @@ export class ScheduleWriter {
           const block = blocks[i];
           switch(block.type) {
             case ScheduleBlockType.TASK:
-              scheduleOut += `<span style=\"color:yellow\">${block.startTime.format("HH:mm")}</span> - ${block.text}\n`;
+              scheduleOut += `*${block.startTime.format("HH:mm")}* - ${block.text}\n`;
               break;
             case ScheduleBlockType.DATE_HEADER:
-              scheduleOut += `\n<span style=\"color:yellow\">${block.startTime.format("YYYY-MM-DD")}</span>:\n\n`;
+              scheduleOut += `\n*${block.startTime.format("YYYY-MM-DD")}*:\n\n`;
               break;
           }
         }
-        scheduleOut += "</code></pre>";
+        scheduleOut += "```";
 
         const textToWrite = `${textBefore}${preamble}\n${EOF}\n${scheduleOut}\n${EOF}${textAfterPostambleEof}`;
         this.app.vault.modify(mv.file, textToWrite); 
@@ -280,7 +302,6 @@ export default class ObsidianTimeBlocking extends Plugin {
 `not done 
 description includes TODO 
 path does not include TODO Template 
-tags include #P1 
 `
           ).then((tasks : TaskExternal[]) => {
             console.log("Obsidian-Time-Blocking: ",tasks);
