@@ -9,6 +9,7 @@ class TaskExternal {
   public readonly tags: string[]; // a list of ASCII tags, distilled from the description.
   public readonly originalMarkdown: string; // the original markdown task.
   public readonly description: string; // the description of the task.
+  public readonly estimatedTimeToComplete: number | null | undefined; // the estimated time to complete the task, in minutes.
   public readonly startDate: Moment | null;
   public readonly scheduledDate: Moment | null;
   public readonly dueDate: Moment | null;
@@ -77,6 +78,7 @@ class ScheduleAlgorithm {
   private readonly maxBlockSize = 60; // the unit for these three is always minutes.
   private readonly minBlockSize = 15;
   private readonly blockStepSize = 5; // I always want blocks to be divisible by 5 mins.
+  private readonly defaultBlockSize = 30;
   // ------ SCHEDULING BLOCKS ------
   // ------ SCHEDULING ALGORITHM ------
   // TODO: add break time that user can specify.
@@ -117,17 +119,49 @@ class ScheduleAlgorithm {
     // with which to schedule tasks into.
     // TODO: We need to add to the tasks plugin another piece of metadata for estimated time to complete.
     // This will be part of our priv extension.
-    const taskBlockSize = 30; // currently we are just scheduling tasks as 30 minute blocks.
     let timeCursor = this.scheduleBegin;
     let blocks: ScheduleBlock[] = [];
-    let dateCursor = moment(this.viewBegin);
-    blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", moment(dateCursor)));
-    for (let task of tasks) {
-      // NOTE: we must call moment on a moment to clone it.
+    let dateCursor = moment(this.viewBegin);   
+    let insertDateHeader = () => {
+      blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", moment(dateCursor)));
+    }
+    insertDateHeader();
+    let insertTask = (task : TaskExternal) => {
       blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, this.descriptionFilter(task.description), moment(dateCursor).add(timeCursor, "minutes")));
-      timeCursor += taskBlockSize;
+    }
+    let insertBreak = () => {
       blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "BREAK", moment(dateCursor).add(timeCursor, "minutes")));
       timeCursor += this.padding;
+      checkBoundary();
+    }
+    let checkBoundary = () => {
+      // TODO: currently right now it is possible for us to go over scheduleBound, or "lose" some of a task across the 24 Hour boundary.
+      // check if the timeCursor has crossed the boundary of a day.
+      if (timeCursor >= 60 * 24) {
+        dateCursor.add(1, "days");
+        timeCursor = this.scheduleBegin;
+        insertDateHeader();
+      }
+    }
+    for (let task of tasks) {
+      // NOTE: we must call moment on a moment to clone it.
+      if (task.estimatedTimeToComplete) {
+        let timeLeft = task.estimatedTimeToComplete;
+        let times = Math.ceil(task.estimatedTimeToComplete / this.maxBlockSize);
+        while (times > 0) {
+          insertTask(task);
+          timeCursor += Math.min(this.maxBlockSize, timeLeft);
+          checkBoundary();
+          insertBreak();          
+          times--;
+          timeLeft -= this.maxBlockSize;
+        }
+      } else {
+        insertTask(task);
+        timeCursor += this.defaultBlockSize;
+        checkBoundary();
+        insertBreak();        
+      }
     }
     blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN", moment(dateCursor).add(timeCursor, "minutes")));
     return blocks;
