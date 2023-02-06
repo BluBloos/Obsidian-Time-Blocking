@@ -97,12 +97,12 @@ class ScheduleAlgorithm {
     if (task.dueDate) {
       const timeUntilDue = task.dueDate.diff(moment(), "hours");
       if (timeUntilDue <= 24) return 1;
-      if (timeUntilDue <= 48) return 2;
+      if (timeUntilDue <= 24 * 14) return 2; // my personal rule is if within next 2 weeks, it's effectively P1, but not quite.
     }
     if (task.tags.includes("#P1")) return 1;
-    if (task.tags.includes("#P2")) return 2;
-    if (task.tags.includes("#P3")) return 3;
-    return 4;
+    if (task.tags.includes("#P2")) return 3;
+    if (task.tags.includes("#P3")) return 4;
+    return 5;
   };
   // TODO: currently we are using the descriptionFilter as a workaround to get P1, P2, P3 tags to "work".
   // but optimally it looks like we might want to reinvestigate how we render things.
