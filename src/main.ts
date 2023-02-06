@@ -4,6 +4,11 @@ import moment from "moment";
 // TODO: in the future we want to add a feature to show DONE todos for the purpose
 // of looking at historical schedules.
 
+// TODO: if something is scheduled for a particular day, we should bias to put the task on
+// that day. force it, if possible.
+
+// TODO: if a task is scheduled to begin after a particular day, we ought to not schedule it before that day.
+
 const LOCK_SYMBOL: string = "🔒";
 const DUE_DATE_SYMBOL: string = "📅";
 
@@ -107,7 +112,7 @@ class ScheduleAlgorithm {
     const tagsBettered = cruftRemoved.replace(/#([a-zA-Z0-9]+)/g, (match : string) => {
       return `**${match}**`;
     });
-    return tagsBettered;
+    return tagsBettered.trim();
   };
   // TODO: Implement this sort of thing as a future feature. don't need for MVP right now.
   private readonly floatDeadlines = true; // this setting
@@ -134,7 +139,6 @@ class ScheduleAlgorithm {
     let insertDateHeader = () => {
       blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", moment(dateCursor)));
     }
-    insertDateHeader();
     // also render task, I suppose.
     let insertTask = (task : TaskExternal) => {
       let renderDueDate = (task.dueDate) ? ` ${DUE_DATE_SYMBOL} ${task.dueDate.format("YYYY-MM-DD")}` : "";
@@ -142,18 +146,23 @@ class ScheduleAlgorithm {
         `${this.descriptionFilter(task.description)} ${renderDueDate}`, moment(dateCursor).add(timeCursor, "minutes")));
     }
     let insertBreak = () => {
-      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "BREAK", moment(dateCursor).add(timeCursor, "minutes")));
+      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", moment(dateCursor).add(timeCursor, "minutes")));
       timeCursor += this.padding;
       checkBoundary();
     }
-    let checkBoundary = () => {
+    let checkBoundary = () : Boolean => {
       // TODO: currently right now it is possible for us to go over scheduleBound, or "lose" some of a task across the 24 Hour boundary.
       // check if the timeCursor has crossed the boundary of a day.
       if (timeCursor >= this.scheduleEnd) {
         dateCursor.add(1, "days");
         timeCursor = this.scheduleBegin;
         insertDateHeader();
+        return true;
       }
+      return false;
+    }
+    if (!checkBoundary()) {
+      insertDateHeader();
     }
     // begin by sort the tasks by their priority.
     //
