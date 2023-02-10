@@ -15,7 +15,6 @@ import moment from "moment";
 // so, we want more than just scheduleBegin and scheduleEnd.
 // maybe I want many windows, for example.
 // TODO: Add recurring tasks (render and schedule behaviour).
-// TODO: use viewEnd to stop schedule early.
 
 // SCHEDULE LIVENESS:
 // TODO: make it react to vault changes. do by alter Tasks plugin instead of "oneHot" model do the "register callback model".
@@ -54,7 +53,8 @@ class TaskExternal {
 
 enum ScheduleBlockType {
   TASK,
-  DATE_HEADER
+  DATE_HEADER,
+  EXIT
 };
 
 /// this class is a block that the ScheduleAlogrithm outputs.
@@ -103,7 +103,7 @@ class ScheduleAlgorithm {
   // ------ SCHEDULE WINDOW ------
   // ------ SCHEDULE VIEW ------
   private readonly viewBegin = "2023-02-04"; // begin is inclusive
-  private readonly viewEnd = "2023-02-5"; // the end is exclusive.
+  private readonly viewEnd = "2023-02-11"; // the end is exclusive, so for this specific example it is 2023-02-10 EOD.
   // ------ SHCEDULE VIEW ------
   // ------ SCHEDULING BLOCKS ------
   private readonly maxBlockSize = 90; // the unit for these three is always minutes.
@@ -168,15 +168,31 @@ class ScheduleAlgorithm {
       timeCursor += this.padding;
       checkBoundary();
     }
+    /// @returns true if we crossed the boundary.
+    /// may emit an EXIT block if no more tasks may be scheduled.
     let checkBoundary = () : Boolean => {
+      let result : Boolean = false;
       // TODO: currently right now it is possible for us to go over scheduleBound, or "lose" some of a task across the 24 Hour boundary.
       // check if the timeCursor has crossed the boundary of a day.
       if (timeCursor >= this.scheduleEnd) {
         dateCursor.add(1, "days");
         timeCursor = this.scheduleBegin;
-        insertDateHeader();
+        result= true;
+      }
+
+      // viewEnd is always at the beginning of a day at the time of writing this comment.
+      // so we could put this within the above if.
+      // but incase viewEnd ever changes, best to keep this here.
+      if (moment(dateCursor).add(timeCursor, "minutes").isAfter(moment(this.viewEnd))) {
+        // overwrite last added task as its extent exceeds the viewEnd.
+        blocks[blocks.length-1]=(new ScheduleBlock(ScheduleBlockType.EXIT, "", moment(this.viewEnd)));
         return true;
       }
+
+      if (result) {
+        insertDateHeader();
+      }
+
       return false;
     }
     if (!checkBoundary()) {
@@ -275,6 +291,7 @@ export class ScheduleWriter {
         for (let i = 0; i < blocks.length; i++)
         {
           const block = blocks[i];
+          let shouldExit = false;
           switch(block.type) {
             case ScheduleBlockType.TASK:
               scheduleOut += `*${block.startTime.format("HH:mm")}* - ${block.text}\n`;
@@ -282,6 +299,12 @@ export class ScheduleWriter {
             case ScheduleBlockType.DATE_HEADER:
               scheduleOut += `\n*${block.startTime.format("YYYY-MM-DD")}*:\n\n`;
               break;
+            case ScheduleBlockType.EXIT:
+              shouldExit = true;
+              break;
+          }
+          if (shouldExit) {
+            break;
           }
         }
         scheduleOut += "```";
