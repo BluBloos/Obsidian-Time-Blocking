@@ -1,16 +1,43 @@
 import type { Moment } from 'moment/moment';
 import moment from "moment";
 
-// TODO: in the future we want to add a feature to show DONE todos for the purpose
-// of looking at historical schedules.
+// ----------------- MVP: -----------------
 
-// TODO: if something is scheduled for a particular day, we should bias to put the task on
-// that day. force it, if possible.
+// TODO: MVP: Use Obsidian API call to replace a region of text in a file to avoid full file overwrite bug.
 
-// TODO: if a task is scheduled to begin after a particular day, we ought to not schedule it before that day.
+// USER SETTINGS:
+// TODO: Add parsing of scheduler object params from the .md, including the taskFilter.
+
+// SCHEDULE ALGORITHM:
+// TODO: Force tasks to begin after startDate.
+// TODO: Force scheduled on.
+// TODO: Offer more variability in scheduling window size.
+// so, we want more than just scheduleBegin and scheduleEnd.
+// maybe I want many windows, for example.
+// TODO: Add recurring tasks (render and schedule behaviour).
+// TODO: use viewEnd to stop schedule early.
+
+// SCHEDULE LIVENESS:
+// TODO: make it react to vault changes. do by alter Tasks plugin instead of "oneHot" model do the "register callback model".
+// we are effectively a virtual QueryRenderer.
+
+// TODO: SCHEDULE EDITING:
+// - adjust formatting of individual tasks to be `endTime - taskDescription`.
+// - adjust formmatting of entire thing to go at the granularity of the block size and put tasks at the block wherre they begin.
+// - hook the ScheduleHelper into the plugin.
+// - add dirty bit and reschedule after edits made with ScheduleHelper.
+// TODO: ScheduleHelper:
+// - make delete put the task into recycle bin.
+// - make copy potentially yank from recycle bin.
+// - add reflow of tasks when inserting
+// - add implicit lock insertion.
+
+// ----------------- MVP: -----------------
 
 const LOCK_SYMBOL: string = "🔒";
 const DUE_DATE_SYMBOL: string = "📅";
+const SCHEDULED_DATE_SYMBOL: string = "⏳";
+const SCHEDULED_START_DATE_SYMBOL : string = /*plane */ "🛫";
 
 class TaskExternal {
   public readonly isDone: Boolean;
@@ -23,7 +50,6 @@ class TaskExternal {
   public readonly scheduledDate: Moment | null;
   public readonly dueDate: Moment | null;
   public readonly doneDate: Moment | null;
-  // TODO: recurring tasks should get sheduled in the calendar as such.
 }
 
 enum ScheduleBlockType {
@@ -68,19 +94,14 @@ const DEFAULT_SETTINGS: ObsidianTimeBlockingSettings = {
   scheduleEnd: "18:00",
 };
 
-// TODO: maybe in the future we might want to be scheduling more abstract objects.
-// Currently, we are only scheduling a list of TaskExternal.
+
 class ScheduleAlgorithm {
-  // TODO: Add parsing of scheduler object params from the .md  
+
   // ------ SCHEDULE WINDOW ------
-  // TODO: Offer more variability in scheduling window size.
-  // so, we want more than just scheduleBegin and scheduleEnd.
-  // maybe I want many windows, for example.
   private readonly scheduleBegin = 60 * 8; // You may schedule after 8 AM. basic arithmetic is supported.
   private readonly scheduleEnd = 60 * 20; // Not past 8 PM
   // ------ SCHEDULE WINDOW ------
   // ------ SCHEDULE VIEW ------
-  // TODO: actually do something with viewBegin/End. Right now I don't care.
   private readonly viewBegin = "2023-02-04"; // begin is inclusive
   private readonly viewEnd = "2023-02-5"; // the end is exclusive.
   // ------ SHCEDULE VIEW ------
@@ -91,7 +112,7 @@ class ScheduleAlgorithm {
   private readonly defaultBlockSize = 30;
   // ------ SCHEDULING BLOCKS ------
   // ------ SCHEDULING ALGORITHM ------
-  // TODO: add break time that user can specify.
+  
   private readonly padding = 15;
   private readonly priorityAlgo = (task: TaskExternal) => {
     if (task.dueDate) {
@@ -104,9 +125,7 @@ class ScheduleAlgorithm {
     if (task.tags.includes("#P3")) return 4;
     return 5;
   };
-  // TODO: currently we are using the descriptionFilter as a workaround to get P1, P2, P3 tags to "work".
-  // but optimally it looks like we might want to reinvestigate how we render things.
-  // if a ```timeblocking region can do what we want, then maybe we ought to use that.
+
   private readonly descriptionFilter = (description: string) => {
     const cruftRemoved = description.replace("[[TODO]](Noah):", "");
     const tagsBettered = cruftRemoved.replace(/#([a-zA-Z0-9]+)/g, (match : string) => {
@@ -114,14 +133,10 @@ class ScheduleAlgorithm {
     });
     return tagsBettered.trim();
   };
-  // TODO: Implement this sort of thing as a future feature. don't need for MVP right now.
-  private readonly floatDeadlines = true; // this setting
-  private readonly floatDeadlinesRegion = 60 * 24; // in minutes.
   // ------ SCHEDULING ALGORITHM ------
 
   public isEqual(other: ScheduleAlgorithm) {
-    // TODO: two equal schedules are defined as having the same parameters.
-    // because then they will produce the same schedule.
+    // TODO:
     return true;
   }
 
@@ -142,8 +157,11 @@ class ScheduleAlgorithm {
     // also render task, I suppose.
     let insertTask = (task : TaskExternal) => {
       let renderDueDate = (task.dueDate) ? ` ${DUE_DATE_SYMBOL} ${task.dueDate.format("YYYY-MM-DD")}` : "";
+      let renderScheduledDate = (task.scheduledDate) ? ` ${SCHEDULED_DATE_SYMBOL} ${task.scheduledDate.format("YYYY-MM-DD")}` : "";
+      let renderStartDate = (task.startDate) ? ` ${SCHEDULED_START_DATE_SYMBOL} ${task.startDate.format("YYYY-MM-DD")}` : "";
       blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, 
-        `${this.descriptionFilter(task.description)} ${renderDueDate}`, moment(dateCursor).add(timeCursor, "minutes")));
+        `${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}`,
+        moment(dateCursor).add(timeCursor, "minutes")));
     }
     let insertBreak = () => {
       blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", moment(dateCursor).add(timeCursor, "minutes")));
@@ -310,7 +328,9 @@ export default class ObsidianTimeBlocking extends Plugin {
           let tasks = this.app.plugins.plugins["obsidian-tasks-plugin"].oneHotResolveQueryToTasks(
 `not done 
 description includes TODO 
-path does not include TODO Template 
+path does not include TODO Template
+path does not include Weekly Journal Template
+tags do not include #someday
 `
           ).then((tasks : TaskExternal[]) => {
             console.log("Obsidian-Time-Blocking: ",tasks);
@@ -398,3 +418,22 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
       );
   }
 }
+
+// ------------- POST MVP -------------
+
+// TODO: maybe in the future we might want to be scheduling more abstract objects.
+// Currently, we are only scheduling a list of TaskExternal.
+
+// TODO: for autocomplete writing something like "90" might mean 90 minutes,
+// so autocomplete to 1:00 is welcome.
+
+// TODO: show DONE todos for the purpose of looking at historical schedules.
+
+// TODO: add break time that user can specify. For MVP, make a recurring task that is for ex) "lunch".
+
+// TODO: with description filter we have quite a bit of flexibility in what we can do. but in a future version we might
+// want to automate some of the "syntax highlighting".
+
+// TODO: Deadline floating.
+
+// TODO: opt, schedule caching.
