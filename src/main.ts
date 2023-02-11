@@ -9,11 +9,7 @@ import moment from "moment";
 // TODO: Add parsing of scheduler object params from the .md, including the taskFilter.
 
 // SCHEDULE ALGORITHM:
-// TODO: Force tasks to begin after startDate.
 // TODO: Force scheduled on.
-// TODO: Offer more variability in scheduling window size.
-// so, we want more than just scheduleBegin and scheduleEnd.
-// maybe I want many windows, for example.
 // TODO: Add recurring tasks (render and schedule behaviour).
 
 // SCHEDULE LIVENESS:
@@ -505,6 +501,10 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
 */
 
 // ------------- POST MVP -------------
+
+// TODO: Offer more variability in scheduling window size.
+// so, we want more than just scheduleBegin and scheduleEnd.
+// maybe I want many windows, for example.
 
 // TODO: don't schedule breaks at the end of a day.
 
