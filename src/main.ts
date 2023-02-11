@@ -3,8 +3,6 @@ import moment from "moment";
 import { RRule } from 'rrule';
 
 
-// TODO: fix incorrect date headers.
-// TODO: also fix what seeems to be error in relative ordering between startDate and scheduledDate?
 
 
 // ----------------- MVP: -----------------
@@ -87,8 +85,8 @@ class TaskExternal {
     scheduledDate : Moment | null,
     dueDate : Moment | null,
     doneDate : Moment | null,
-    recurrenceRrule : RRule | undefined,
-    recurrenceReferenceDate : Moment | undefined | null,
+    recurrenceRrule : RRule | null,
+    recurrenceReferenceDate : Moment | null,
   }) {
     this.isDone = isDone;
     this.priority = priority;
@@ -96,12 +94,12 @@ class TaskExternal {
     this.originalMarkdown = originalMarkdown;
     this.description = description;
     this.estimatedTimeToComplete = estimatedTimeToComplete;
-    this.startDate = startDate;
-    this.scheduledDate = scheduledDate;
-    this.dueDate = dueDate;
-    this.doneDate = doneDate;
+    this.startDate = CREATE_MOMENT(startDate);
+    this.scheduledDate = CREATE_MOMENT(scheduledDate);
+    this.dueDate = CREATE_MOMENT(dueDate);
+    this.doneDate = CREATE_MOMENT(doneDate);
     this.recurrenceRrule = recurrenceRrule;
-    this.recurrenceReferenceDate = recurrenceReferenceDate;
+    this.recurrenceReferenceDate = CREATE_MOMENT(recurrenceReferenceDate);
   }
 
 }
@@ -153,7 +151,7 @@ function getEarlierOfTwoDates(date1:Moment|null, date2:Moment|null) {
   if (date1 && !date2) return date1;
   if (!date1 && date2) return date2;
   if (date1 && date2) {
-    return date1.isAfter(date2) ? date2 : date1;
+    return date1.isAfter(date2, 'D') ? date2 : date1;
   }
   return null;
 }
@@ -162,13 +160,21 @@ function getLaterOfTwoDates(date1:Moment|null, date2:Moment|null) {
   if (date1 && !date2) return date1;
   if (!date1 && date2) return date2;
   if (date1 && date2) {
-    return date1.isAfter(date2) ? date1 : date2;
+    return date1.isAfter(date2, 'D') ? date1 : date2;
   }
   return null;
 }
 
 function getTaskStartDate(task: TaskExternal) {
   return(getEarlierOfTwoDates(task.startDate, task.scheduledDate));
+}
+
+function CREATE_MOMENT(any? : any) {
+  if (any === undefined) {
+    return moment.utc();
+  }
+  if (any === null) return any;
+  return moment.utc(any);
 }
 
 class ScheduleAlgorithm {
@@ -191,10 +197,10 @@ class ScheduleAlgorithm {
   
   private readonly padding = 15;
 
-  private readonly scheduleAlgo = (tasks : TaskExternal[]) : TaskExternal[] => {
+  private readonly scheduleAlgo = (tasks : TaskExternal[]) => {
     const priorityAlgo = (task: TaskExternal) => {
       if (task.dueDate) {
-        const timeUntilDue = task.dueDate.diff(moment(), "hours");
+        const timeUntilDue = task.dueDate.diff(CREATE_MOMENT(), "hours");
         if (timeUntilDue <= 24) return 1;
         if (timeUntilDue <= 24 * 14) return 2; // my personal rule is if within next 2 weeks, it's effectively P1, but not quite.
       }
@@ -210,16 +216,26 @@ class ScheduleAlgorithm {
       return priorityAlgo(a) - priorityAlgo(b);
     });
     // pass 2.
-    tasks.sort( (a, b) => {
+    let filteredTasks = tasks.filter((task) => {
+      return !!getTaskStartDate(task);
+    });
+    filteredTasks.sort( (a, b) => {
       let aEarliestStart = getTaskStartDate(a);
       let bEarliestStart = getTaskStartDate(b);
+      let result :number = 0;
       if (aEarliestStart && bEarliestStart) {
-        return aEarliestStart.isAfter(bEarliestStart) ? 1 : (aEarliestStart.isSame(bEarliestStart) ? 0 : -1);
-      } else {
-        return 0;
+        result = aEarliestStart.isAfter(bEarliestStart, 'D') ? 1 : (aEarliestStart.isSame(bEarliestStart, 'D') ? 0 : -1);
       }
+      //console.log("compare func", aEarliestStart, bEarliestStart, result);
+      return result;
     });
-    return tasks;
+    // merge filteredTasks back in.
+    for (let i = 0, Idx = 0; Idx < tasks.length; Idx++) {
+      //tasks[i] = filteredTasks[i];
+      if (filteredTasks.includes(tasks[Idx])) {
+        tasks[Idx] = filteredTasks[i++];
+      }
+    }
   }
 
   private readonly descriptionFilter = (description: string) => {
@@ -239,16 +255,16 @@ class ScheduleAlgorithm {
   public makeSchedule(tasks: TaskExternal[]) : ScheduleBlock[] {
     // TODO: We need to add to the tasks plugin another piece of metadata for estimated time to complete.
     // This will be part of our priv extension.
-    let timeNow = moment();
-    let today = moment(timeNow.format("YYYY-MM-DD"));
+    let timeNow = CREATE_MOMENT();
+    let today = CREATE_MOMENT(timeNow.format("YYYY-MM-DD"));
     let alignUp = (from: number, alignment: number) => {
       return Math.ceil(from / alignment) * alignment;
     }
     let timeCursor = alignUp(Math.max(this.scheduleBegin, timeNow.diff(today, "minutes")), this.blockStepSize);
     let blocks: ScheduleBlock[] = [];
-    let dateCursor = moment(today);
+    let dateCursor = CREATE_MOMENT(today);
     let insertDateHeader = () => {
-      blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", moment(dateCursor)));
+      blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", CREATE_MOMENT(dateCursor)));
     }
     let estimatedTimeToCompleteToString = (time: number) : string => {
       let hours = Math.floor(time / 60);
@@ -267,10 +283,10 @@ class ScheduleAlgorithm {
       let renderRecurrence = (task.recurrenceRrule) ? ` ${RECURRENCE_RULE_SYMBOL} ${task.recurrenceRrule.toText()}` : "";
         blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, 
         `${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}`,
-        moment(dateCursor).add(timeCursor, "minutes")));
+        CREATE_MOMENT(dateCursor).add(timeCursor, "minutes")));
     }
     let insertBreak = () => {
-      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", moment(dateCursor).add(timeCursor, "minutes")));
+      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes")));
       timeCursor += this.padding;
       checkBoundary();
     }
@@ -290,9 +306,9 @@ class ScheduleAlgorithm {
       // viewEnd is always at the beginning of a day at the time of writing this comment.
       // so we could put this within the above if.
       // but incase viewEnd ever changes, best to keep this here.
-      if (moment(dateCursor).add(timeCursor, "minutes").isAfter(moment(this.viewEnd))) {
+      if (CREATE_MOMENT(dateCursor).add(timeCursor, "minutes").isAfter(CREATE_MOMENT(this.viewEnd))) {
         // overwrite last added task as its extent exceeds the viewEnd.
-        blocks[blocks.length-1]=(new ScheduleBlock(ScheduleBlockType.EXIT, "", moment(this.viewEnd)));
+        blocks[blocks.length-1]=(new ScheduleBlock(ScheduleBlockType.EXIT, "", CREATE_MOMENT(this.viewEnd)));
         return true;
       }
 
@@ -313,30 +329,33 @@ class ScheduleAlgorithm {
         let task : TaskExternal = tasks[i];
         if (task.recurrenceRrule) {
           {
-            let beginDate = getLaterOfTwoDates(task.recurrenceReferenceDate, moment(this.viewBegin));
+            let beginDate = getLaterOfTwoDates(task.recurrenceReferenceDate, CREATE_MOMENT(today));
             if (beginDate) {
               tasks.splice(i, 1); // we want to remove this particular task from the array.
-              task.recurrenceRrule.between(
+              let newTasks = task.recurrenceRrule.between(
                 beginDate.toDate(),
-                moment(this.viewEnd).add(-1,'day').toDate(),
+                CREATE_MOMENT(this.viewEnd).add(-1,'day').toDate(),
                 true // inclusive
-              ).forEach((date) => {
+              )
+              for (let date of newTasks) {
                 let newTask = new TaskExternal({...task}); // TODO: does this work?
-                newTask.scheduledDate = moment.utc(date);
+                newTask.scheduledDate = CREATE_MOMENT(date);
                 tasks.push(newTask); // OK, because everything will get re-order right after.
-              });
+              }
             } else {
               // TODO:
               console.error("something is wrong");
             }
           }          
           continue; // don't increment i so as to land on next task which is now in slot just deleted.
+        } else {
+          tasks[i] = new TaskExternal({...task}); // clone to convert from local to UTC.
         }
         i++;
       }
     }
     // USER GETS TO DO A CUSTOM SORTING OF TASKS.
-    tasks = this.scheduleAlgo(tasks);
+    this.scheduleAlgo(tasks); // WORKS IN PLACE.
     console.log("tasks pre-blocking", tasks);
     // USER GETS TO DO A CUSTOM SORTING OF TASKS.
     let taskStack : TaskExternal[] = [];
@@ -392,7 +411,7 @@ class ScheduleAlgorithm {
       }
       taskIdx++;
     }
-    blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN", moment(dateCursor).add(timeCursor, "minutes")));
+    blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes")));
     return blocks;
   }
 
@@ -531,7 +550,7 @@ export default class ObsidianTimeBlocking extends Plugin {
         if (leaf.view instanceof MarkdownView) {
           //console.log("leaf.view",leaf.view);
 
-          let tasks = this.app.plugins.plugins["obsidian-tasks-plugin"].oneHotResolveQueryToTasks(
+          this.app.plugins.plugins["obsidian-tasks-plugin"].oneHotResolveQueryToTasks(
 `not done 
 description includes TODO 
 path does not include TODO Template
@@ -539,8 +558,9 @@ path does not include Weekly Journal Template
 tags do not include #someday
 `
           ).then((tasks : TaskExternal[]) => {
-            console.log("Obsidian-Time-Blocking: ",tasks);
-            let blocks : ScheduleBlock[] = this.scheduleAlgorithm.makeSchedule(tasks);
+            console.log("Obsidian-Time-Blocking: ", tasks);
+            let tempTasks = Array.from(tasks);
+            let blocks : ScheduleBlock[] = this.scheduleAlgorithm.makeSchedule(tempTasks);
             this.scheduleWriter.writeSchedule(leaf.view, blocks);
           });
         }
