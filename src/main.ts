@@ -4,12 +4,17 @@ import { RRule } from 'rrule';
 
 // ----------------- MVP: -----------------
 
-// TODO: Add notifcations to scream at me about next scheduled task?
-//       Add a timer? 
-//       Toggle track?
+// HIGH VALUE TODOs:
+// TODO: mark a task as complete.
+// TODO: Add edit task modal button to rendered lines.
+// TODO: start timer - https://github.com/BluBloos/python-timer
 
-// Mark a task as complete.
-// Open task edit modal and delete task from there.
+// BUG FIXES:
+// TODO: Fix UTC delayed thing.
+
+// SMOL:
+// TODO: Add user preference for schedule short tasks first.
+// TODO: add priority (the native Tasks kind) into the mix.
 
 // QOL + TASKS PLUGIN MODS:
 // TODO: Verify that we have fixed file overwrite thing.
@@ -156,20 +161,22 @@ function CREATE_MOMENT(any? : any) {
   return moment.utc(any);
 }
 
+const MIN_PER_HOUR = 60;
+const NOON = MIN_PER_HOUR * 12;
 class ScheduleAlgorithm {
 
 // -------------------------------------------------- SETTINGS --------------------------------------------------
 
-  private readonly scheduleBegin = 60 * 8; // You may schedule after 8 AM. basic arithmetic is supported.
-  private readonly scheduleEnd = 60 * 20;  // Not past 8 PM
-  private readonly viewBegin = "2023-02-04"; // begin is inclusive
-  private readonly viewEnd =   "2023-12-30";   //< the end is exclusive, so for this specific
-                                             //  example it is 2023-02-10 EOD.
+  private readonly scheduleBegin = NOON + MIN_PER_HOUR * 5;
+  private readonly scheduleEnd   = NOON + MIN_PER_HOUR * 9;
+  private readonly viewBegin = "2023-02-04";  // begin is inclusive
+  private readonly viewEnd =   "2023-12-30";  //< the end is exclusive, so for this specific
+                                              //  example it is 2023-02-10 EOD.
 
-  private readonly maxBlockSize = 90; // the unit for these three is always minutes.
+  private readonly maxBlockSize = 90;  // the unit for these three is always minutes.
   private readonly minBlockSize = 15;
-  private readonly blockStepSize = 5; //< I always want blocks to be divisible by 5 mins. this is
-                                      //  also an implicit alignment for task begin.
+  private readonly blockStepSize = 5;  //< I always want blocks to be divisible by 5 mins. this is
+                                       //  also an implicit alignment for task begin.
   private readonly defaultBlockSize = 30;
 
   private readonly padding = 15;
