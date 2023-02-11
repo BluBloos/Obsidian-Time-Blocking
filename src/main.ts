@@ -185,7 +185,7 @@ class ScheduleAlgorithm {
       // TODO: currently right now it is possible for us to go over scheduleBound, or "lose" some of a task across the 24 Hour boundary.
       // check if the timeCursor has crossed the boundary of a day.
       if (timeCursor >= this.scheduleEnd) {
-        let datesToAdd = Math.ceil( (timeCursor - this.scheduleEnd) / (24 * 60) );
+        let datesToAdd = 1 + Math.floor( (timeCursor - this.scheduleEnd) / (24 * 60) );
         dateCursor.add(datesToAdd, "days");
         timeCursor = this.scheduleBegin;
         result = true;
@@ -256,16 +256,18 @@ class ScheduleAlgorithm {
         while (times > 0) {
           insertTask(task);
           timeCursor += alignUp(Math.max(Math.min(this.maxBlockSize, timeLeft), this.minBlockSize), this.blockStepSize);
-          checkBoundary();
-          insertBreak();          
+          if (!checkBoundary()) {
+            insertBreak();
+          }
           times--;
           timeLeft -= this.maxBlockSize;
         }
       } else {
         insertTask(task);
         timeCursor += this.defaultBlockSize;
-        checkBoundary();
-        insertBreak();        
+        if (!checkBoundary()) {
+          insertBreak();
+        }
       }
       taskIdx++;
     }
