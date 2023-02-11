@@ -268,7 +268,7 @@ class ScheduleAlgorithm {
     let insertDateHeader = () => {
       blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", CREATE_MOMENT(dateCursor)));
     }
-    let estimatedTimeToCompleteToString = (time: number) : string => {
+    let minutesToString = (time: number) : string => {
       let hours = Math.floor(time / 60);
       let minutes = time % 60;
       let hoursString = (hours > 0) ? `${hours}h` : "";
@@ -276,15 +276,15 @@ class ScheduleAlgorithm {
       return `${hoursString}${minutesString}`;
     }
     // also render task, I suppose.
-    let insertTask = (task : TaskExternal) => {
+    let insertTask = (task : TaskExternal, duration : number) => {
       let renderDueDate = (task.dueDate) ? ` ${DUE_DATE_SYMBOL} ${task.dueDate.format("YYYY-MM-DD")}` : "";
       let renderScheduledDate = (task.scheduledDate) ? ` ${SCHEDULED_DATE_SYMBOL} ${task.scheduledDate.format("YYYY-MM-DD")}` : "";
       let renderStartDate = (task.startDate) ? ` ${SCHEDULED_START_DATE_SYMBOL} ${task.startDate.format("YYYY-MM-DD")}` : "";
       let renderEstimatedTimeToComplete =
-        (task.estimatedTimeToComplete) ? ` ${ESTIMATED_TIME_TO_COMPLETE_SYMBOL} ${estimatedTimeToCompleteToString(task.estimatedTimeToComplete)}` : "";
+        (task.estimatedTimeToComplete) ? ` ${ESTIMATED_TIME_TO_COMPLETE_SYMBOL} ${minutesToString(task.estimatedTimeToComplete)}` : "";
       let renderRecurrence = (task.recurrenceRrule) ? ` ${RECURRENCE_RULE_SYMBOL} ${task.recurrenceRrule.toText()}` : "";
         blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, 
-        `${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}`,
+        `${minutesToString(duration)} - ${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}`,
         CREATE_MOMENT(dateCursor).add(timeCursor, "minutes")));
     }
     let insertBreak = () => {
@@ -396,8 +396,9 @@ class ScheduleAlgorithm {
         let timeLeft = task.estimatedTimeToComplete;
         let times = Math.ceil(task.estimatedTimeToComplete / this.maxBlockSize);
         while (times > 0) {
-          insertTask(task);
-          timeCursor += alignUp(Math.max(Math.min(this.maxBlockSize, timeLeft), this.minBlockSize), this.blockStepSize);
+          const taskDuration = alignUp(Math.max(Math.min(this.maxBlockSize, timeLeft), this.minBlockSize), this.blockStepSize);
+          insertTask(task, taskDuration);
+          timeCursor += taskDuration;
           if (!checkBoundary()) {
             insertBreak();
           }
@@ -405,8 +406,9 @@ class ScheduleAlgorithm {
           timeLeft -= this.maxBlockSize;
         }
       } else {
-        insertTask(task);
-        timeCursor += this.defaultBlockSize;
+        const taskDuration = this.defaultBlockSize
+        insertTask(task, taskDuration);
+        timeCursor += taskDuration;
         if (!checkBoundary()) {
           insertBreak();
         }
@@ -488,7 +490,7 @@ export class ScheduleWriter {
             let shouldExit = false;
             switch(block.type) {
               case ScheduleBlockType.TASK:
-                scheduleOut += `*${block.startTime.format("HH:mm")}* - ${block.text}\n`;
+                scheduleOut += `*${block.startTime.format("HH:mm")}* | ${block.text}\n`;
                 break;
               case ScheduleBlockType.DATE_HEADER:
                 scheduleOut += `\n*${block.startTime.format("YYYY-MM-DD")}*:\n\n`;
@@ -501,6 +503,7 @@ export class ScheduleWriter {
               break;
             }
           }
+
           scheduleOut += "```";
   
           const textToWrite = `${textBefore}${preamble}\n${EOF}\n${scheduleOut}\n${EOF}${textAfterPostambleEof}`;
