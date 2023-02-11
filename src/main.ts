@@ -6,15 +6,14 @@ import moment from "moment";
 // USER SETTINGS:
 // TODO: Add parsing of scheduler object params from the .md, including the taskFilter.
 
-// SCHEDULE ALGORITHM:
-// TODO: Force scheduled on.
+// MORE TASKS PLUGIN MODS:
 // TODO: Add recurring tasks (render and schedule behaviour).
-
-// QOL:
 // TODO: be able to mark a task as done right from within the schedule (does set dirty bit).
-// TODO: MVP: Use Obsidian API call to replace a region of text in a file to avoid full file overwrite bug.
 // TODO: make it react to vault changes. do by alter Tasks plugin instead of "oneHot" model do the "register callback model".
 // we are effectively a virtual QueryRenderer.
+
+// QOL:
+// TODO: MVP: Use Obsidian API call to replace a region of text in a file to avoid full file overwrite bug.
 
 // TODO: SCHEDULE EDITING:
 // - adjust formatting of individual tasks to be `endTime - taskDescription`.
@@ -71,7 +70,7 @@ class ScheduleBlock {
 
 import {
   App,
-  addIcon,
+  TFile,
   Plugin,
   WorkspaceLeaf,
   MarkdownView,
@@ -303,83 +302,102 @@ export class ScheduleWriter {
     this.app = app;
   }
 
+  static areTwoFilesSame(file1: TFile, file2: TFile) {
+    return file1.path === file2.path;
+  }
+
   // TODO: It would be preferred if our plugin could render to a custom ```timeblocking block.
   // as this would ensure data integrity of the rest of the markdown file.
   async writeSchedule(mv : MarkdownView, blocks: ScheduleBlock[]) {
-    // TODO: The below code is very slow and crude. We need to optimize it. I suspect shlemiel the painter's algorithm is at play here.
-    const fileContent = mv.data;
-    if (fileContent === undefined || fileContent === null) {
-      console.log("Obsidian-Time-Blocking: fileContent is undefined|null.");
+
+    const fileRef = mv.file;
+    if (!fileRef) {
+      console.error("Obsidian-Time-Blocking: fileRef for MarkdownView is undefined|null. Returning early.");
       return;
     }
-    const preamble = "# begin timeblocking";
-    const EOF = "---";
-    const postamble = "# end timeblocking";
-    const textSections = fileContent.split(preamble);
-    if (textSections.length == 2) {
-      const textBefore = textSections[0];
-      let oneAfterPreambleEof = 0;
-      let isWhitespace = (char:string ) : Boolean => {
-        return char === " " || char === "\t" || char === "\r" || char === "\n";
-      };
-      // NOTE: we allow for an aribtrary amount of whitespace after the preamble (or no whitespace).
-      while ( (oneAfterPreambleEof < textSections[1].length) && isWhitespace(textSections[1][oneAfterPreambleEof]) ) {oneAfterPreambleEof++;}
-      // NOTE: we allow for an aribtrary amount of dashes     after the preamble (or no dashes).
-      while( (oneAfterPreambleEof < textSections[1].length) && textSections[1][oneAfterPreambleEof] === '-' ) {oneAfterPreambleEof++;}
-      const textAfter  = textSections[1].slice(oneAfterPreambleEof).split(EOF); // If indexStart >= str.length, an empty string is returned.
-      if (textAfter.length > 1) {
-        const textAfterPostambleEof = textAfter[1];
-        let scheduleOut = "```markdown";
-/* Example schedule:
-2023-02-05: 
 
-08:00 - Task 1
-09:00 - Task 2
-10:00 - Task 3
+    // atomically read, process, and write file.
+    this.app.vault.process(fileRef, (fileContent:string) => {
 
-2023-02-06:
-
-08:00 - Task 4
-09:00 - Task 5
-10:00 - Task 6
-
-2023-02-07: 
-
-08:00 - Task 7
-09:00 - Task 8
-10:00 - Task 9
-</pre>*/
-        for (let i = 0; i < blocks.length; i++)
-        {
-          const block = blocks[i];
-          let shouldExit = false;
-          switch(block.type) {
-            case ScheduleBlockType.TASK:
-              scheduleOut += `*${block.startTime.format("HH:mm")}* - ${block.text}\n`;
+      // TODO: The below code is very slow and crude. We need to optimize it. I suspect shlemiel the painter's algorithm is at play here.
+      const preamble = "# begin timeblocking";
+      const EOF = "---";
+      const postamble = "# end timeblocking";
+      const textSections = fileContent.split(preamble);
+      if (textSections.length == 2) {
+        const textBefore = textSections[0];
+        let oneAfterPreambleEof = 0;
+        let isWhitespace = (char:string ) : Boolean => {
+          return char === " " || char === "\t" || char === "\r" || char === "\n";
+        };
+        // NOTE: we allow for an aribtrary amount of whitespace after the preamble (or no whitespace).
+        while ( (oneAfterPreambleEof < textSections[1].length) && isWhitespace(textSections[1][oneAfterPreambleEof]) ) {oneAfterPreambleEof++;}
+        // NOTE: we allow for an aribtrary amount of dashes     after the preamble (or no dashes).
+        while( (oneAfterPreambleEof < textSections[1].length) && textSections[1][oneAfterPreambleEof] === '-' ) {oneAfterPreambleEof++;}
+        const textAfter  = textSections[1].slice(oneAfterPreambleEof).split(EOF); // If indexStart >= str.length, an empty string is returned.
+        if (textAfter.length > 1) {
+          const textAfterPostambleEof = textAfter[1];
+          let scheduleOut = "```markdown";
+  /* Example schedule:
+  2023-02-05: 
+  
+  08:00 - Task 1
+  09:00 - Task 2
+  10:00 - Task 3
+  
+  2023-02-06:
+  
+  08:00 - Task 4
+  09:00 - Task 5
+  10:00 - Task 6
+  
+  2023-02-07: 
+  
+  08:00 - Task 7
+  09:00 - Task 8
+  10:00 - Task 9
+  </pre>*/
+          for (let i = 0; i < blocks.length; i++)
+          {
+            const block = blocks[i];
+            let shouldExit = false;
+            switch(block.type) {
+              case ScheduleBlockType.TASK:
+                scheduleOut += `*${block.startTime.format("HH:mm")}* - ${block.text}\n`;
+                break;
+              case ScheduleBlockType.DATE_HEADER:
+                scheduleOut += `\n*${block.startTime.format("YYYY-MM-DD")}*:\n\n`;
+                break;
+              case ScheduleBlockType.EXIT:
+                shouldExit = true;
+                break;
+            }
+            if (shouldExit) {
               break;
-            case ScheduleBlockType.DATE_HEADER:
-              scheduleOut += `\n*${block.startTime.format("YYYY-MM-DD")}*:\n\n`;
-              break;
-            case ScheduleBlockType.EXIT:
-              shouldExit = true;
-              break;
+            }
           }
-          if (shouldExit) {
-            break;
-          }
-        }
-        scheduleOut += "```";
+          scheduleOut += "```";
+  
+          const textToWrite = `${textBefore}${preamble}\n${EOF}\n${scheduleOut}\n${EOF}${textAfterPostambleEof}`;
 
-        const textToWrite = `${textBefore}${preamble}\n${EOF}\n${scheduleOut}\n${EOF}${textAfterPostambleEof}`;
-        this.app.vault.modify(mv.file, textToWrite); 
+          // NOTE: because of race conditions ... we must ensure that the markdown file on the markdown view does not
+          // get pulled from right under us 
+          if (ScheduleWriter.areTwoFilesSame(mv.file, fileRef)) {      
+            return textToWrite;
+          } else {
+            console.error("Obsidian-Time-Blocking: TFile slipped out from under us(MarkdownView) during write, aborting write.");
+          }
+        } else {
+          console.error("Obsidian-Time-Blocking: Unable to find postamble section, aborting write.");
+        }     
+      } else if (textSections.length > 1) {
+        console.error("Obsidian-Time-Blocking: Too many timeblocking sections, aborting write.");
       } else {
-        console.log("Obsidian-Time-Blocking: we cannot continue as unable to find postamble section.");
-      }     
-    } else if (textSections.length > 1) {
-      console.log("Obsidian-Time-Blocking: too many timeblocking sections");
-    } else {
-      console.log("Obsidian-Time-Blocking: no timeblocking section found");
-    }
+        console.error("Obsidian-Time-Blocking: No timeblocking section found, aborting write.");
+      }
+      return fileContent;
+    });
+      
   }
 };
 
@@ -407,7 +425,7 @@ export default class ObsidianTimeBlocking extends Plugin {
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", (leaf: WorkspaceLeaf) => {
         if (leaf.view instanceof MarkdownView) {
-          console.log("leaf.view",leaf.view);
+          //console.log("leaf.view",leaf.view);
 
           let tasks = this.app.plugins.plugins["obsidian-tasks-plugin"].oneHotResolveQueryToTasks(
 `not done 
