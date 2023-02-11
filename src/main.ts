@@ -487,6 +487,7 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
 
 // ------------- POST MVP -------------
 
+// TODO: fix bug where when the tasks prior come flush with scheduleEnd and the next task is a "startOn", then we get double date headers.
 // TODO: resolve bug where FIN does not show if there is an EXIT block. 
 // TODO: resolve "bug" where output is not-so-helpful when no tasks have been scheduled.
 
