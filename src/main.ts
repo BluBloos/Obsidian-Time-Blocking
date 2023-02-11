@@ -8,16 +8,6 @@ import { RRule } from 'rrule';
 // ----------------- MVP: -----------------
 
 // MORE TASKS PLUGIN MODS:
-
-// TODO: Add recurring tasks (render and schedule behaviour).
-// ^ we should want this even in the case that we only have it at the granularity of a single day.
-// and it is prob best to keep the features of Tasks minimal to avoid bloat and that sort of thing.
-
-// ^ a funny workaround would be, if I see something that says, "lunch", schedule it around noon.
-// just be smart like that.
-// ^ see a daily task that says run? schedule it for early in the morning.
-// crap like this.
-
 // TODO: Be able to mark a task as done right from within the schedule (does set dirty bit).
 
 
@@ -656,6 +646,9 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
 */
 
 // ------------- POST MVP -------------
+
+// TODO: add support for "lunch" and other smart scheduling sort of things by making such tasks
+// with particular descriptions get biased towards what type they ought to be but using an hourly or minutely granularity.
 
 // TODO: make it react to vault changes. do by alter Tasks plugin instead of "oneHot" model do the "register callback model".
 // we are effectively a virtual QueryRenderer.
