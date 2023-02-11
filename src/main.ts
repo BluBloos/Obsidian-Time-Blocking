@@ -1,19 +1,27 @@
 import type { Moment } from 'moment/moment';
 import moment from "moment";
+import { RRule } from 'rrule';
+
+
+// TODO: fix incorrect date headers.
+// TODO: also fix what seeems to be error in relative ordering between startDate and scheduledDate?
+
 
 // ----------------- MVP: -----------------
 
-// USER SETTINGS:
-// TODO: Add parsing of scheduler object params from the .md, including the taskFilter.
-
 // MORE TASKS PLUGIN MODS:
-// TODO: Add recurring tasks (render and schedule behaviour).
-// TODO: be able to mark a task as done right from within the schedule (does set dirty bit).
-// TODO: make it react to vault changes. do by alter Tasks plugin instead of "oneHot" model do the "register callback model".
-// we are effectively a virtual QueryRenderer.
 
-// QOL:
-// TODO: MVP: Use Obsidian API call to replace a region of text in a file to avoid full file overwrite bug.
+// TODO: Add recurring tasks (render and schedule behaviour).
+// ^ we should want this even in the case that we only have it at the granularity of a single day.
+// and it is prob best to keep the features of Tasks minimal to avoid bloat and that sort of thing.
+
+// ^ a funny workaround would be, if I see something that says, "lunch", schedule it around noon.
+// just be smart like that.
+// ^ see a daily task that says run? schedule it for early in the morning.
+// crap like this.
+
+// TODO: Be able to mark a task as done right from within the schedule (does set dirty bit).
+
 
 // TODO: SCHEDULE EDITING:
 // - adjust formatting of individual tasks to be `endTime - taskDescription`.
@@ -26,6 +34,9 @@ import moment from "moment";
 // - add reflow of tasks when inserting
 // - add implicit lock insertion.
 
+// QOL:
+// TODO: verify that we have fixed file overwrite thing.
+
 // ----------------- MVP: -----------------
 
 const LOCK_SYMBOL: string = "🔒";
@@ -33,18 +44,66 @@ const DUE_DATE_SYMBOL: string = "📅";
 const SCHEDULED_DATE_SYMBOL: string = "⏳";
 const SCHEDULED_START_DATE_SYMBOL : string = /*plane */ "🛫";
 const ESTIMATED_TIME_TO_COMPLETE_SYMBOL: string = "⏱️";
+const RECURRENCE_RULE_SYMBOL: string = "🔁";
 
 class TaskExternal {
-  public readonly isDone: Boolean;
-  public readonly priority: number;                                    // 1 is the highest priority, any larger number is a lower priority.
-  public readonly tags: string[];                                      // a list of tags, distilled from the description.
-  public readonly originalMarkdown: string;                            // the original markdown task.
-  public readonly description: string;                                 // the description of the task.
-  public readonly estimatedTimeToComplete: number | null | undefined;  // the estimated time to complete the task, in minutes.
-  public readonly startDate: Moment | null;                            // the day on and after which the task is allowed to be scheduled.
-  public readonly scheduledDate: Moment | null;
-  public readonly dueDate: Moment | null;                              // the day on which that task must be completed EOD.
-  public readonly doneDate: Moment | null;                          
+  public  isDone: Boolean;
+  public  priority: number;                                    // 1 is the highest priority, any larger number is a lower priority.
+  public  tags: string[];                                      // a list of tags, distilled from the description.
+  public  originalMarkdown: string;                            // the original markdown task.
+  public  description: string;                                 // the description of the task.
+  public  estimatedTimeToComplete: number | null | undefined;  // the estimated time to complete the task, in minutes.
+  public  startDate: Moment | null;                            // the day on and after which the task is allowed to be scheduled.
+  public  scheduledDate: Moment | null;
+  public  dueDate: Moment | null;                              // the day on which that task must be completed EOD.
+  public  doneDate: Moment | null;         
+  
+  public  recurrenceRrule: RRule | undefined;                  ///< RRule as per the lib.
+  public  recurrenceReferenceDate: Moment | undefined | null;  ///< The date after which the recurrence rule applies, may be
+                                                                       ///  null if the RRule itself has a ref date,
+                                                                       ///  ex) "every Monday".
+
+  constructor({
+    isDone,
+    priority,
+    tags,
+    originalMarkdown,
+    description,
+    estimatedTimeToComplete,
+    startDate,
+    scheduledDate,
+    dueDate,
+    doneDate,
+    recurrenceRrule,
+    recurrenceReferenceDate,
+  } : {
+    isDone : Boolean,
+    priority : number,
+    tags : string[],
+    originalMarkdown : string,
+    description : string,
+    estimatedTimeToComplete : number | null | undefined,
+    startDate : Moment | null,
+    scheduledDate : Moment | null,
+    dueDate : Moment | null,
+    doneDate : Moment | null,
+    recurrenceRrule : RRule | undefined,
+    recurrenceReferenceDate : Moment | undefined | null,
+  }) {
+    this.isDone = isDone;
+    this.priority = priority;
+    this.tags = tags;
+    this.originalMarkdown = originalMarkdown;
+    this.description = description;
+    this.estimatedTimeToComplete = estimatedTimeToComplete;
+    this.startDate = startDate;
+    this.scheduledDate = scheduledDate;
+    this.dueDate = dueDate;
+    this.doneDate = doneDate;
+    this.recurrenceRrule = recurrenceRrule;
+    this.recurrenceReferenceDate = recurrenceReferenceDate;
+  }
+
 }
 
 enum ScheduleBlockType {
@@ -90,12 +149,26 @@ const DEFAULT_SETTINGS: ObsidianTimeBlockingSettings = {
   scheduleEnd: "18:00",
 };
 
-function getTaskStartDate(task: TaskExternal) {
-  if (task.startDate && !task.scheduledDate) return task.startDate;
-  if (!task.startDate && task.scheduledDate) return task.scheduledDate;
-  if (task.startDate && task.scheduledDate) {
-    return task.startDate.isAfter(task.scheduledDate) ? task.scheduledDate : task.startDate;
+function getEarlierOfTwoDates(date1:Moment|null, date2:Moment|null) {
+  if (date1 && !date2) return date1;
+  if (!date1 && date2) return date2;
+  if (date1 && date2) {
+    return date1.isAfter(date2) ? date2 : date1;
   }
+  return null;
+}
+
+function getLaterOfTwoDates(date1:Moment|null, date2:Moment|null) {
+  if (date1 && !date2) return date1;
+  if (!date1 && date2) return date2;
+  if (date1 && date2) {
+    return date1.isAfter(date2) ? date1 : date2;
+  }
+  return null;
+}
+
+function getTaskStartDate(task: TaskExternal) {
+  return(getEarlierOfTwoDates(task.startDate, task.scheduledDate));
 }
 
 class ScheduleAlgorithm {
@@ -191,8 +264,9 @@ class ScheduleAlgorithm {
       let renderStartDate = (task.startDate) ? ` ${SCHEDULED_START_DATE_SYMBOL} ${task.startDate.format("YYYY-MM-DD")}` : "";
       let renderEstimatedTimeToComplete =
         (task.estimatedTimeToComplete) ? ` ${ESTIMATED_TIME_TO_COMPLETE_SYMBOL} ${estimatedTimeToCompleteToString(task.estimatedTimeToComplete)}` : "";
-      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, 
-        `${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}`,
+      let renderRecurrence = (task.recurrenceRrule) ? ` ${RECURRENCE_RULE_SYMBOL} ${task.recurrenceRrule.toText()}` : "";
+        blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, 
+        `${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}`,
         moment(dateCursor).add(timeCursor, "minutes")));
     }
     let insertBreak = () => {
@@ -230,6 +304,36 @@ class ScheduleAlgorithm {
     }
     if (!checkBoundary()) {
       insertDateHeader();
+    }
+
+    // before we sauce the block of tasks to the user, we are to decompose the recurring ones.
+    {
+      let IterCount = tasks.length;
+      for (let i = 0, Idx = 0; Idx < IterCount; Idx++ ) {
+        let task : TaskExternal = tasks[i];
+        if (task.recurrenceRrule) {
+          {
+            let beginDate = getLaterOfTwoDates(task.recurrenceReferenceDate, moment(this.viewBegin));
+            if (beginDate) {
+              tasks.splice(i, 1); // we want to remove this particular task from the array.
+              task.recurrenceRrule.between(
+                beginDate.toDate(),
+                moment(this.viewEnd).add(-1,'day').toDate(),
+                true // inclusive
+              ).forEach((date) => {
+                let newTask = new TaskExternal({...task}); // TODO: does this work?
+                newTask.scheduledDate = moment.utc(date);
+                tasks.push(newTask); // OK, because everything will get re-order right after.
+              });
+            } else {
+              // TODO:
+              console.error("something is wrong");
+            }
+          }          
+          continue; // don't increment i so as to land on next task which is now in slot just deleted.
+        }
+        i++;
+      }
     }
     // USER GETS TO DO A CUSTOM SORTING OF TASKS.
     tasks = this.scheduleAlgo(tasks);
@@ -532,6 +636,12 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
 */
 
 // ------------- POST MVP -------------
+
+// TODO: make it react to vault changes. do by alter Tasks plugin instead of "oneHot" model do the "register callback model".
+// we are effectively a virtual QueryRenderer.
+
+// USER SETTINGS:
+// TODO: Add parsing of scheduler object params from the .md, including the taskFilter.
 
 // TODO: Give scheduled on a higher priority.
 
