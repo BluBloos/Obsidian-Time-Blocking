@@ -4,37 +4,14 @@ import { RRule } from 'rrule';
 
 // ----------------- MVP: -----------------
 
-// TODO: SCHEDULE EDITING (in order):
-// - adjust formatting of individual tasks to be `duration - taskDescription`.
-// - adjust formatting of entire thing to go at the granularity of the block size and put tasks at the block where they begin.
+// TODO: Add notifcations to scream at me about next scheduled task?
+//       Add a timer? 
+//       Toggle track?
 
-// resolve locks:
-// - this considers the already "rendered" schedule for the locks.
-// - hook locks into scheduling algo.
-// there are a few different locks:
-// - lock a slot for any tasks that begin then.
-// - lock the endTime of a task.
-// - the implicit lock in the recycle bin (which shouldbe? at top for visibility).
-
-// we can do this after impl lock code because we already have "re-navigate to MV to reschedule" option for testing.
-// - add manual reschedule button.
-
-// SCHEDULE_HELPER is to help, but things can still be done manually. we hook that first ^.
-// - hook the ScheduleHelper into the plugin (need to think)
-// - ideally I want this to be like a Copilot where it just tab completes.
-// - so there is some timing thing. Like, you type. and maybe you do edits in a continuous stream. this tab completion shows
-// only if you stop the stream.
-// - is this possible in Ob? there is a "replace text region in file".
-// - can I render a list of "replace text region op" as a greyed-out-suggestion-tab-complete-thing?
-
-// TODO: ScheduleHelper:
-// - make delete put the task into recycle bin.
-// - make copy potentially yank from recycle bin.
-// - add reflow of tasks when inserting
-// - add implicit lock insertion.
+// Mark a task as complete.
+// Open task edit modal and delete task from there.
 
 // QOL + TASKS PLUGIN MODS:
-// TODO: Be able to mark a task as done right from within the schedule (does set dirty bit).
 // TODO: Verify that we have fixed file overwrite thing.
 
 // ----------------- MVP: -----------------
@@ -181,22 +158,20 @@ function CREATE_MOMENT(any? : any) {
 
 class ScheduleAlgorithm {
 
-  // ------ SCHEDULE WINDOW ------
+// -------------------------------------------------- SETTINGS --------------------------------------------------
+
   private readonly scheduleBegin = 60 * 8; // You may schedule after 8 AM. basic arithmetic is supported.
-  private readonly scheduleEnd = 60 * 20; // Not past 8 PM
-  // ------ SCHEDULE WINDOW ------
-  // ------ SCHEDULE VIEW ------
+  private readonly scheduleEnd = 60 * 20;  // Not past 8 PM
   private readonly viewBegin = "2023-02-04"; // begin is inclusive
-  private readonly viewEnd = "2024-09-10"; // the end is exclusive, so for this specific example it is 2023-02-10 EOD.
-  // ------ SHCEDULE VIEW ------
-  // ------ SCHEDULING BLOCKS ------
+  private readonly viewEnd =   "2023-12-30";   //< the end is exclusive, so for this specific
+                                             //  example it is 2023-02-10 EOD.
+
   private readonly maxBlockSize = 90; // the unit for these three is always minutes.
   private readonly minBlockSize = 15;
-  private readonly blockStepSize = 5; // I always want blocks to be divisible by 5 mins. this is also an implicit alignment for task begin.
+  private readonly blockStepSize = 5; //< I always want blocks to be divisible by 5 mins. this is
+                                      //  also an implicit alignment for task begin.
   private readonly defaultBlockSize = 30;
-  // ------ SCHEDULING BLOCKS ------
-  // ------ SCHEDULING ALGORITHM ------
-  
+
   private readonly padding = 15;
 
   private readonly scheduleAlgo = (tasks : TaskExternal[]) => {
@@ -247,7 +222,10 @@ class ScheduleAlgorithm {
     });
     return tagsBettered.trim();
   };
-  // ------ SCHEDULING ALGORITHM ------
+
+
+// -------------------------------------------------- SETTINGS --------------------------------------------------
+
 
   public isEqual(other: ScheduleAlgorithm) {
     // TODO:
@@ -661,6 +639,38 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
 */
 
 // ------------- POST MVP -------------
+
+
+// --- SCHEDULE EDITING ---
+// TODO: SCHEDULE EDITING (in order):
+// - adjust formatting of entire thing to go at the granularity of the block size and put tasks at the block where they begin.
+
+// resolve locks:
+// - this considers the already "rendered" schedule for the locks.
+// - hook locks into scheduling algo.
+// there are a few different locks:
+// - lock a slot for any tasks that begin then.
+// - lock the endTime of a task.
+// - the implicit lock in the recycle bin (which shouldbe? at top for visibility).
+
+// we can do this after impl lock code because we already have "re-navigate to MV to reschedule" option for testing.
+// - add manual reschedule button.
+
+// SCHEDULE_HELPER is to help, but things can still be done manually. we hook that first ^.
+// - hook the ScheduleHelper into the plugin (need to think)
+// - ideally I want this to be like a Copilot where it just tab completes.
+// - so there is some timing thing. Like, you type. and maybe you do edits in a continuous stream. this tab completion shows
+// only if you stop the stream.
+// - is this possible in Ob? there is a "replace text region in file".
+// - can I render a list of "replace text region op" as a greyed-out-suggestion-tab-complete-thing?
+
+// TODO: ScheduleHelper:
+// - make delete put the task into recycle bin.
+// - make copy potentially yank from recycle bin.
+// - add reflow of tasks when inserting
+// - add implicit lock insertion.
+
+// --- SCHEDULE EDITING ---
 
 // TODO: add support for "lunch" and other smart scheduling sort of things by making such tasks
 // with particular descriptions get biased towards what type they ought to be but using an hourly or minutely granularity.
