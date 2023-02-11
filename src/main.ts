@@ -3,8 +3,6 @@ import moment from "moment";
 
 // ----------------- MVP: -----------------
 
-// TODO: MVP: Use Obsidian API call to replace a region of text in a file to avoid full file overwrite bug.
-
 // USER SETTINGS:
 // TODO: Add parsing of scheduler object params from the .md, including the taskFilter.
 
@@ -12,7 +10,9 @@ import moment from "moment";
 // TODO: Force scheduled on.
 // TODO: Add recurring tasks (render and schedule behaviour).
 
-// SCHEDULE LIVENESS:
+// QOL:
+// TODO: be able to mark a task as done right from within the schedule (does set dirty bit).
+// TODO: MVP: Use Obsidian API call to replace a region of text in a file to avoid full file overwrite bug.
 // TODO: make it react to vault changes. do by alter Tasks plugin instead of "oneHot" model do the "register callback model".
 // we are effectively a virtual QueryRenderer.
 
@@ -91,6 +91,13 @@ const DEFAULT_SETTINGS: ObsidianTimeBlockingSettings = {
   scheduleEnd: "18:00",
 };
 
+function getTaskStartDate(task: TaskExternal) {
+  if (task.startDate && !task.scheduledDate) return task.startDate;
+  if (!task.startDate && task.scheduledDate) return task.scheduledDate;
+  if (task.startDate && task.scheduledDate) {
+    return task.startDate.isAfter(task.scheduledDate) ? task.scheduledDate : task.startDate;
+  }
+}
 
 class ScheduleAlgorithm {
 
@@ -100,7 +107,7 @@ class ScheduleAlgorithm {
   // ------ SCHEDULE WINDOW ------
   // ------ SCHEDULE VIEW ------
   private readonly viewBegin = "2023-02-04"; // begin is inclusive
-  private readonly viewEnd = "2023-09-10"; // the end is exclusive, so for this specific example it is 2023-02-10 EOD.
+  private readonly viewEnd = "2024-09-10"; // the end is exclusive, so for this specific example it is 2023-02-10 EOD.
   // ------ SHCEDULE VIEW ------
   // ------ SCHEDULING BLOCKS ------
   private readonly maxBlockSize = 90; // the unit for these three is always minutes.
@@ -130,9 +137,12 @@ class ScheduleAlgorithm {
       // 0 means leave a and b unchanged.
       return priorityAlgo(a) - priorityAlgo(b);
     });
+    // pass 2.
     tasks.sort( (a, b) => {
-      if (a.startDate && b.startDate) {
-        return a.startDate.isAfter(b.startDate) ? 1 : (a.startDate.isSame(b.startDate) ? 0 : -1);
+      let aEarliestStart = getTaskStartDate(a);
+      let bEarliestStart = getTaskStartDate(b);
+      if (aEarliestStart && bEarliestStart) {
+        return aEarliestStart.isAfter(bEarliestStart) ? 1 : (aEarliestStart.isSame(bEarliestStart) ? 0 : -1);
       } else {
         return 0;
       }
@@ -227,9 +237,10 @@ class ScheduleAlgorithm {
     console.log("tasks pre-blocking", tasks);
     // USER GETS TO DO A CUSTOM SORTING OF TASKS.
     let taskStack : TaskExternal[] = [];
-    let shouldNotDefer = (task: TaskExternal) => {
-      return task.startDate ?
-        !task.startDate.isAfter(dateCursor, "day") : true;
+    let shouldNotDefer = (task: TaskExternal) => {      
+      let taskStartDate = getTaskStartDate(task);
+      return taskStartDate ?
+        !taskStartDate.isAfter(dateCursor, "day") : true;
     }
     let taskIdx = 0;
     while ( (taskIdx < tasks.length) || (taskStack.length > 0) ) {
@@ -248,7 +259,7 @@ class ScheduleAlgorithm {
           // insert this task into the schedule.
           // TODO: investigate if this works in odd cases where for example
           // the user says to schedule tasks within the full 24h slot.
-          timeCursor = moment(task.startDate).diff(dateCursor, "minutes");
+          timeCursor = getTaskStartDate(task).diff(dateCursor, "minutes");
           checkBoundary();
         } else {
           taskStack.push(task);
@@ -497,10 +508,14 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
 /*
 
 1. That the startOn tasks are orderded correctly.
+2. The relative ordering between startOn and scheduledOn is correct when same. scheduledOn should come first (higher priority).
+
 
 */
 
 // ------------- POST MVP -------------
+
+// TODO: Give scheduled on a higher priority.
 
 // TODO: Offer more variability in scheduling window size.
 // so, we want more than just scheduleBegin and scheduleEnd.
