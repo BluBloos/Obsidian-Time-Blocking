@@ -37,18 +37,19 @@ const LOCK_SYMBOL: string = "🔒";
 const DUE_DATE_SYMBOL: string = "📅";
 const SCHEDULED_DATE_SYMBOL: string = "⏳";
 const SCHEDULED_START_DATE_SYMBOL : string = /*plane */ "🛫";
+const ESTIMATED_TIME_TO_COMPLETE_SYMBOL: string = "⏱️";
 
 class TaskExternal {
   public readonly isDone: Boolean;
-  public readonly priority: number; // 1 is the highest priority, any larger number is a lower priority.
-  public readonly tags: string[]; // a list of ASCII tags, distilled from the description.
-  public readonly originalMarkdown: string; // the original markdown task.
-  public readonly description: string; // the description of the task.
-  public readonly estimatedTimeToComplete: number | null | undefined; // the estimated time to complete the task, in minutes.
-  public readonly startDate: Moment | null;
+  public readonly priority: number;                                    // 1 is the highest priority, any larger number is a lower priority.
+  public readonly tags: string[];                                      // a list of tags, distilled from the description.
+  public readonly originalMarkdown: string;                            // the original markdown task.
+  public readonly description: string;                                 // the description of the task.
+  public readonly estimatedTimeToComplete: number | null | undefined;  // the estimated time to complete the task, in minutes.
+  public readonly startDate: Moment | null;                            // the day on and after which the task is allowed to be scheduled.
   public readonly scheduledDate: Moment | null;
-  public readonly dueDate: Moment | null;
-  public readonly doneDate: Moment | null;
+  public readonly dueDate: Moment | null;                              // the day on which that task must be completed EOD.
+  public readonly doneDate: Moment | null;                          
 }
 
 enum ScheduleBlockType {
@@ -103,7 +104,7 @@ class ScheduleAlgorithm {
   // ------ SCHEDULE WINDOW ------
   // ------ SCHEDULE VIEW ------
   private readonly viewBegin = "2023-02-04"; // begin is inclusive
-  private readonly viewEnd = "2023-02-11"; // the end is exclusive, so for this specific example it is 2023-02-10 EOD.
+  private readonly viewEnd = "2023-09-10"; // the end is exclusive, so for this specific example it is 2023-02-10 EOD.
   // ------ SHCEDULE VIEW ------
   // ------ SCHEDULING BLOCKS ------
   private readonly maxBlockSize = 90; // the unit for these three is always minutes.
@@ -154,13 +155,22 @@ class ScheduleAlgorithm {
     let insertDateHeader = () => {
       blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", moment(dateCursor)));
     }
+    let estimatedTimeToCompleteToString = (time: number) : string => {
+      let hours = Math.floor(time / 60);
+      let minutes = time % 60;
+      let hoursString = (hours > 0) ? `${hours}h` : "";
+      let minutesString = (minutes > 0) ? `${minutes}m` : "";
+      return `${hoursString}${minutesString}`;
+    }
     // also render task, I suppose.
     let insertTask = (task : TaskExternal) => {
       let renderDueDate = (task.dueDate) ? ` ${DUE_DATE_SYMBOL} ${task.dueDate.format("YYYY-MM-DD")}` : "";
       let renderScheduledDate = (task.scheduledDate) ? ` ${SCHEDULED_DATE_SYMBOL} ${task.scheduledDate.format("YYYY-MM-DD")}` : "";
       let renderStartDate = (task.startDate) ? ` ${SCHEDULED_START_DATE_SYMBOL} ${task.startDate.format("YYYY-MM-DD")}` : "";
+      let renderEstimatedTimeToComplete =
+        (task.estimatedTimeToComplete) ? ` ${ESTIMATED_TIME_TO_COMPLETE_SYMBOL} ${estimatedTimeToCompleteToString(task.estimatedTimeToComplete)}` : "";
       blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, 
-        `${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}`,
+        `${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}`,
         moment(dateCursor).add(timeCursor, "minutes")));
     }
     let insertBreak = () => {
@@ -175,9 +185,10 @@ class ScheduleAlgorithm {
       // TODO: currently right now it is possible for us to go over scheduleBound, or "lose" some of a task across the 24 Hour boundary.
       // check if the timeCursor has crossed the boundary of a day.
       if (timeCursor >= this.scheduleEnd) {
-        dateCursor.add(1, "days");
+        let datesToAdd = Math.ceil( (timeCursor - this.scheduleEnd) / (24 * 60) );
+        dateCursor.add(datesToAdd, "days");
         timeCursor = this.scheduleBegin;
-        result= true;
+        result = true;
       }
 
       // viewEnd is always at the beginning of a day at the time of writing this comment.
@@ -193,7 +204,7 @@ class ScheduleAlgorithm {
         insertDateHeader();
       }
 
-      return false;
+      return result;
     }
     if (!checkBoundary()) {
       insertDateHeader();
@@ -208,7 +219,36 @@ class ScheduleAlgorithm {
       // 0 means leave a and b unchanged.
       return this.priorityAlgo(a) - this.priorityAlgo(b);
     });
-    for (let task of tasks) {
+    let taskStack : TaskExternal[] = [];
+    let shouldNotDefer = (task: TaskExternal) => {
+      return task.startDate ?
+        !task.startDate.isAfter(dateCursor, "day") : true;
+    }
+    let taskIdx = 0;
+    while ( (taskIdx < tasks.length) || (taskStack.length > 0) ) {
+      let task = tasks[taskIdx];
+      let bLeftoverStackCase = taskIdx >= tasks.length ;
+      if (taskStack.length > 0) {
+        let topOfStack = taskStack[taskStack.length-1];
+        if (bLeftoverStackCase || shouldNotDefer(topOfStack)) {
+          task = taskStack.pop();
+          taskIdx--;
+        }
+      }
+      if (!shouldNotDefer(task)) {
+        if (bLeftoverStackCase) {
+          // need to adjust the dateCursor so that we can fulfill the leftover stack case, and actually
+          // insert this task into the schedule.
+          // TODO: investigate if this works in odd cases where for example
+          // the user says to schedule tasks within the full 24h slot.
+          timeCursor = moment(task.startDate).diff(dateCursor, "minutes");
+          checkBoundary();
+        } else {
+          taskStack.push(task);
+          taskIdx++;
+          continue;
+        }
+      }
       // NOTE: we must call moment on a moment to clone it.
       if (task.estimatedTimeToComplete) {
         let timeLeft = task.estimatedTimeToComplete;
@@ -227,6 +267,7 @@ class ScheduleAlgorithm {
         checkBoundary();
         insertBreak();        
       }
+      taskIdx++;
     }
     blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN", moment(dateCursor).add(timeCursor, "minutes")));
     return blocks;
@@ -443,6 +484,9 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
 }
 
 // ------------- POST MVP -------------
+
+// TODO: resolve bug where FIN does not show if there is an EXIT block. 
+// TODO: resolve "bug" where output is not-so-helpful when no tasks have been scheduled.
 
 // TODO: maybe in the future we might want to be scheduling more abstract objects.
 // Currently, we are only scheduling a list of TaskExternal.
