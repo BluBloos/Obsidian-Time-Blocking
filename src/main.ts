@@ -2,28 +2,40 @@ import type { Moment } from 'moment/moment';
 import moment from "moment";
 import { RRule } from 'rrule';
 
-
-
-
 // ----------------- MVP: -----------------
 
-// MORE TASKS PLUGIN MODS:
-// TODO: Be able to mark a task as done right from within the schedule (does set dirty bit).
+// TODO: SCHEDULE EDITING (in order):
+// - adjust formatting of individual tasks to be `duration - taskDescription`.
+// - adjust formatting of entire thing to go at the granularity of the block size and put tasks at the block where they begin.
 
+// resolve locks:
+// - this considers the already "rendered" schedule for the locks.
+// - hook locks into scheduling algo.
+// there are a few different locks:
+// - lock a slot for any tasks that begin then.
+// - lock the endTime of a task.
+// - the implicit lock in the recycle bin (which shouldbe? at top for visibility).
 
-// TODO: SCHEDULE EDITING:
-// - adjust formatting of individual tasks to be `endTime - taskDescription`.
-// - adjust formmatting of entire thing to go at the granularity of the block size and put tasks at the block wherre they begin.
-// - hook the ScheduleHelper into the plugin.
-// - add dirty bit and reschedule after edits made with ScheduleHelper.
+// we can do this after impl lock code because we already have "re-navigate to MV to reschedule" option for testing.
+// - add manual reschedule button.
+
+// SCHEDULE_HELPER is to help, but things can still be done manually. we hook that first ^.
+// - hook the ScheduleHelper into the plugin (need to think)
+// - ideally I want this to be like a Copilot where it just tab completes.
+// - so there is some timing thing. Like, you type. and maybe you do edits in a continuous stream. this tab completion shows
+// only if you stop the stream.
+// - is this possible in Ob? there is a "replace text region in file".
+// - can I render a list of "replace text region op" as a greyed-out-suggestion-tab-complete-thing?
+
 // TODO: ScheduleHelper:
 // - make delete put the task into recycle bin.
 // - make copy potentially yank from recycle bin.
 // - add reflow of tasks when inserting
 // - add implicit lock insertion.
 
-// QOL:
-// TODO: verify that we have fixed file overwrite thing.
+// QOL + TASKS PLUGIN MODS:
+// TODO: Be able to mark a task as done right from within the schedule (does set dirty bit).
+// TODO: Verify that we have fixed file overwrite thing.
 
 // ----------------- MVP: -----------------
 
