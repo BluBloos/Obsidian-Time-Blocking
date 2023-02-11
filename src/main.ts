@@ -115,17 +115,34 @@ class ScheduleAlgorithm {
   // ------ SCHEDULING ALGORITHM ------
   
   private readonly padding = 15;
-  private readonly priorityAlgo = (task: TaskExternal) => {
-    if (task.dueDate) {
-      const timeUntilDue = task.dueDate.diff(moment(), "hours");
-      if (timeUntilDue <= 24) return 1;
-      if (timeUntilDue <= 24 * 14) return 2; // my personal rule is if within next 2 weeks, it's effectively P1, but not quite.
-    }
-    if (task.tags.includes("#P1")) return 1;
-    if (task.tags.includes("#P2")) return 3;
-    if (task.tags.includes("#P3")) return 4;
-    return 5;
-  };
+
+  private readonly scheduleAlgo = (tasks : TaskExternal[]) : TaskExternal[] => {
+    const priorityAlgo = (task: TaskExternal) => {
+      if (task.dueDate) {
+        const timeUntilDue = task.dueDate.diff(moment(), "hours");
+        if (timeUntilDue <= 24) return 1;
+        if (timeUntilDue <= 24 * 14) return 2; // my personal rule is if within next 2 weeks, it's effectively P1, but not quite.
+      }
+      if (task.tags.includes("#P1")) return 1;
+      if (task.tags.includes("#P2")) return 3;
+      if (task.tags.includes("#P3")) return 4;
+      return 5;
+    };
+    tasks.sort((a, b) => {
+      // > 0 means sort a after b.
+      // < 0 means sort a before b.
+      // 0 means leave a and b unchanged.
+      return priorityAlgo(a) - priorityAlgo(b);
+    });
+    tasks.sort( (a, b) => {
+      if (a.startDate && b.startDate) {
+        return a.startDate.isAfter(b.startDate) ? 1 : (a.startDate.isSame(b.startDate) ? 0 : -1);
+      } else {
+        return 0;
+      }
+    });
+    return tasks;
+  }
 
   private readonly descriptionFilter = (description: string) => {
     const cruftRemoved = description.replace("[[TODO]](Noah):", "");
@@ -209,16 +226,10 @@ class ScheduleAlgorithm {
     if (!checkBoundary()) {
       insertDateHeader();
     }
-    // begin by sort the tasks by their priority.
-    //
-    // things with the largest numerical priorities get bubbled to the end of the list,
-    // and hence are scheduled last.
-    tasks.sort((a, b) => {
-      // > 0 means sort a after b.
-      // < 0 means sort a before b.
-      // 0 means leave a and b unchanged.
-      return this.priorityAlgo(a) - this.priorityAlgo(b);
-    });
+    // USER GETS TO DO A CUSTOM SORTING OF TASKS.
+    tasks = this.scheduleAlgo(tasks);
+    console.log("tasks pre-blocking", tasks);
+    // USER GETS TO DO A CUSTOM SORTING OF TASKS.
     let taskStack : TaskExternal[] = [];
     let shouldNotDefer = (task: TaskExternal) => {
       return task.startDate ?
@@ -229,9 +240,9 @@ class ScheduleAlgorithm {
       let task = tasks[taskIdx];
       let bLeftoverStackCase = taskIdx >= tasks.length ;
       if (taskStack.length > 0) {
-        let topOfStack = taskStack[taskStack.length-1];
-        if (bLeftoverStackCase || shouldNotDefer(topOfStack)) {
-          task = taskStack.pop();
+        let firstIn = taskStack[0]; // FIFO
+        if (bLeftoverStackCase || shouldNotDefer(firstIn)) {
+          task = taskStack.shift();
           taskIdx--;
         }
       }
@@ -485,7 +496,17 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
   }
 }
 
+// ------------- TESTS TO ADD LATER -------------
+
+/*
+
+1. That the startOn tasks are orderded correctly.
+
+*/
+
 // ------------- POST MVP -------------
+
+// TODO: don't schedule breaks at the end of a day.
 
 // TODO: fix bug where when the tasks prior come flush with scheduleEnd and the next task is a "startOn", then we get double date headers.
 // TODO: resolve bug where FIN does not show if there is an EXIT block. 
