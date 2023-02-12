@@ -27,6 +27,7 @@ const SCHEDULED_DATE_SYMBOL: string = "⏳";
 const SCHEDULED_START_DATE_SYMBOL : string = /*plane */ "🛫";
 const ESTIMATED_TIME_TO_COMPLETE_SYMBOL: string = "⏱️";
 const RECURRENCE_RULE_SYMBOL: string = "🔁";
+const START_TASK_TIMER_SYMBOL: string = "🏃‍♂️";
 
 class TaskExternal {
   public  isDone: Boolean;
@@ -101,11 +102,12 @@ class ScheduleBlock {
   public readonly type: ScheduleBlockType; // the type of block.
   public readonly text: string;            // the text to be rendered.
   public readonly startTime: Moment;       // when the block begins.
-
-  constructor(type: ScheduleBlockType, text: string, startTime: Moment) {
+  public readonly duration: number;        // how long the block lasts, in minutes.
+  constructor(type: ScheduleBlockType, text: string, startTime: Moment, duration: number) {
     this.type = type;
     this.text = text;
     this.startTime = startTime;
+    this.duration = duration;
   }
 }
 
@@ -116,7 +118,7 @@ import {
   WorkspaceLeaf,
   MarkdownView,
   PluginSettingTab,
-  Setting,
+  Setting
 } from "obsidian";
 
 
@@ -249,7 +251,7 @@ class ScheduleAlgorithm {
     let blocks: ScheduleBlock[] = [];
     let dateCursor = CREATE_MOMENT(today);
     let insertDateHeader = () => {
-      blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", CREATE_MOMENT(dateCursor)));
+      blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", CREATE_MOMENT(dateCursor), 0));
     }
     let minutesToString = (time: number) : string => {
       let hours = Math.floor(time / 60);
@@ -268,10 +270,10 @@ class ScheduleAlgorithm {
       let renderRecurrence = (task.recurrenceRrule) ? ` ${RECURRENCE_RULE_SYMBOL} ${task.recurrenceRrule.toText()}` : "";
         blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, 
         `${minutesToString(duration)} - ${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}`,
-        CREATE_MOMENT(dateCursor).add(timeCursor, "minutes")));
+        CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), duration));
     }
     let insertBreak = () => {
-      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes")));
+      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), this.padding));
       timeCursor += this.padding;
       checkBoundary();
     }
@@ -293,7 +295,7 @@ class ScheduleAlgorithm {
       // but incase viewEnd ever changes, best to keep this here.
       if (CREATE_MOMENT(dateCursor).add(timeCursor, "minutes").isAfter(CREATE_MOMENT(this.viewEnd))) {
         // overwrite last added task as its extent exceeds the viewEnd.
-        blocks[blocks.length-1]=(new ScheduleBlock(ScheduleBlockType.EXIT, "", CREATE_MOMENT(this.viewEnd)));
+        blocks[blocks.length-1]=(new ScheduleBlock(ScheduleBlockType.EXIT, "", CREATE_MOMENT(this.viewEnd), 0));
         return true;
       }
 
@@ -398,7 +400,7 @@ class ScheduleAlgorithm {
       }
       taskIdx++;
     }
-    blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes")));
+    blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), 0));
     return blocks;
   }
 
@@ -447,7 +449,7 @@ export class ScheduleWriter {
         const textAfter  = textSections[1].slice(oneAfterPreambleEof).split(EOF); // If indexStart >= str.length, an empty string is returned.
         if (textAfter.length > 1) {
           const textAfterPostambleEof = textAfter[1];
-          let scheduleOut = "```markdown";
+          let scheduleOut = "";
   /* Example schedule:
   2023-02-05: 
   
@@ -473,7 +475,7 @@ export class ScheduleWriter {
             let shouldExit = false;
             switch(block.type) {
               case ScheduleBlockType.TASK:
-                scheduleOut += `*${block.startTime.format("HH:mm")}* | ${block.text}\n`;
+                scheduleOut += `*${block.startTime.format("HH:mm")}* | ${block.text} [${START_TASK_TIMER_SYMBOL}](https://www.google.com/search?q=timer+${block.duration}+minutes)\n`;
                 break;
               case ScheduleBlockType.DATE_HEADER:
                 scheduleOut += `\n*${block.startTime.format("YYYY-MM-DD")}*:\n\n`;
@@ -486,8 +488,6 @@ export class ScheduleWriter {
               break;
             }
           }
-
-          scheduleOut += "```";
   
           const textToWrite = `${textBefore}${preamble}\n${EOF}\n${scheduleOut}\n${EOF}${textAfterPostambleEof}`;
 
