@@ -122,13 +122,11 @@ import {
 
 // interface seems to be a Typescript thing.
 interface ObsidianTimeBlockingSettings {
-  scheduleBegin: string;
-  scheduleEnd: string;
+  useChromeTimer : boolean;
 }
 
 const DEFAULT_SETTINGS: ObsidianTimeBlockingSettings = {
-  scheduleBegin: "08:00",
-  scheduleEnd: "18:00",
+  useChromeTimer: true
 };
 
 function getEarlierOfTwoDates(date1:Moment|null, date2:Moment|null) {
@@ -602,36 +600,18 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
     containerEl.createEl("h2", { text: "Settings for Obsidian-Time-Blocking" });
 
     new Setting(containerEl)
-      .setName("Schedule begin")
-      .setDesc(
-        "time in HH:MM (24h) format after which tasks may be scheduled in a day"
-      )
-      .addText((text) =>
-        text
-          .setPlaceholder("HH:MM")
-          .setValue(this.plugin.settings.scheduleBegin)
+    .setName('Use Google Timer')
+    .setDesc(
+        'ON: `google.com/search?q=timer...`. OFF: https://github.com/BluBloos/python-timer.',
+    )
+    .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.useChromeTimer)
           .onChange(async (value) => {
-            //console.log("Secret: " + value);
-            this.plugin.settings.scheduleBegin = value;
+            this.plugin.settings.useChromeTimer = value;
             await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Schedule end")
-      .setDesc(
-        "time in HH:MM (24h) format before which tasks must be scheduled in a day"
-      )
-      .addText((text) =>
-        text
-          .setPlaceholder("HH:MM")
-          .setValue(this.plugin.settings.scheduleEnd)
-          .onChange(async (value) => {
-            //console.log("Secret: " + value);
-            this.plugin.settings.scheduleEnd = value;
-            await this.plugin.saveSettings();
-          })
-      );
+          });
+    });
   }
 }
 
