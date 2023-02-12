@@ -7,7 +7,7 @@ import { RRule } from 'rrule';
 // HIGH VALUE TODOs:
 // TODO: mark a task as complete.
 // TODO: Add edit task modal button to rendered lines.
-// TODO: start timer - https://github.com/BluBloos/python-timer
+
 
 // BUG FIXES:
 // TODO: Fix UTC delayed thing.
@@ -627,6 +627,7 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
 
 // ------------- POST MVP -------------
 
+// TODO: hook secondary start timer option - https://github.com/BluBloos/python-timer
 
 // --- SCHEDULE EDITING ---
 // TODO: SCHEDULE EDITING (in order):
