@@ -2,10 +2,19 @@ import type { Moment } from 'moment/moment';
 import moment from "moment";
 import { RRule } from 'rrule';
 
+import { newLivePreviewExtension } from './live_preview';
+
 // ----------------- MVP: -----------------
 
 // HIGH VALUE TODOs:
-// TODO: mark a task as complete.
+// TODO: mark a task as complete:
+//
+// using the takeout box emoji -> 🥡
+// as the button.
+// we'll get the task from the line,
+// then use Task.fromLine to get a Task data structure.
+// then pass that to Tasks and do replaceTaskWithTasks.
+
 // TODO: Add edit task modal button to rendered lines.
 
 
@@ -475,7 +484,7 @@ export class ScheduleWriter {
             let shouldExit = false;
             switch(block.type) {
               case ScheduleBlockType.TASK:
-                scheduleOut += `*${block.startTime.format("HH:mm")}* | ${block.text} [${START_TASK_TIMER_SYMBOL}](https://www.google.com/search?q=timer+${block.duration}+minutes)\n`;
+                scheduleOut += `*${block.startTime.format("HH:mm")}* | [🥡](.) | ${block.text} [${START_TASK_TIMER_SYMBOL}](https://www.google.com/search?q=timer+${block.duration}+minutes)\n`;
                 break;
               case ScheduleBlockType.DATE_HEADER:
                 scheduleOut += `\n*${block.startTime.format("YYYY-MM-DD")}*:\n\n`;
@@ -570,6 +579,8 @@ tags do not include #someday
         }
       },
     });
+
+    this.registerEditorExtension(newLivePreviewExtension()); // needed for getting clicks.
 
     console.log("done loading Obsidian-Time-Blocking plugin.");
   }

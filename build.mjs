@@ -19,6 +19,21 @@ esbuild.build({
 	external: [
 		'obsidian',
 		'electron',
+		'codemirror',
+		'@codemirror/autocomplete',
+		'@codemirror/closebrackets',
+		'@codemirror/commands',
+		'@codemirror/fold',
+		'@codemirror/gutter',
+		'@codemirror/history',
+		'@codemirror/language',
+		'@codemirror/rangeset',
+		'@codemirror/rectangular-selection',
+		'@codemirror/search',
+		'@codemirror/state',
+		'@codemirror/stream-parser',
+		'@codemirror/text',
+		'@codemirror/view',
 		...builtins],
 	format: 'cjs', /* as pertaining to output javascript */
 	target: 'es2016', /* as pertaining to output javascript */
