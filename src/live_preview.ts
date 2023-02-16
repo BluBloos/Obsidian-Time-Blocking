@@ -1,9 +1,9 @@
 import { EditorView, ViewPlugin } from '@codemirror/view';
 import type { PluginValue } from '@codemirror/view';
 
-//import { Notice } from 'obsidian';
-
-//import { Task } from './Task';
+import TaskRegistry from './TaskRegistry';
+import { TaskExternal } from './types';
+const taskRegistry = TaskRegistry.getInstance();
 
 export const newLivePreviewExtension = () => {
     return ViewPlugin.fromClass(LivePreviewExtension);
@@ -38,11 +38,58 @@ console.log("live_preview clk event");
                 const { state } = this.view;
                 const position = this.view.posAtDOM(target);
                 const line = state.doc.lineAt(position);
-                console.log("line",line);
-
-
                 // don't navigate the link.
                 event.preventDefault();
+
+                console.log("line", line);
+                
+                // 1. get task part of the line.
+                // the task part of the line comes after the first '-'.
+                // write code below:
+                const taskPart = line.text.split('-')[1];
+
+                console.log("taskPart", taskPart);
+
+                if (taskPart && taskRegistry.getApp()) {
+                    const TasksPlugin = taskRegistry.getApp().plugins.plugins["obsidian-tasks-plugin"];
+
+                    // TODO: lol, of course this doesn't work - I'm not adding anything to the registry yet.
+                    const task = taskRegistry.getTaskFromRenderedLine(taskPart);
+                    if (task) {
+                        console.log('task from registry', task);
+                        const TasksTask = TasksPlugin.taskFromTaskExternal(task);
+                        const toggledTask = new TaskExternal({
+                            ...task,
+                            isDone: !task.isDone
+                        });
+                        const TaskToggledTask = TasksPlugin.taskFromTaskExternal(toggledTask);
+                        
+                        TasksPlugin.replaceTaskWithTasks(TasksTask, [TaskToggledTask]);
+    
+    // TODO: now we want to re-render our plugin.
+    
+                        console.log("the button has BEEN clicked");
+                        
+                    }
+                }
+
+                return true;
+
+
+
+
+
+                // 2. figure out what TaskExternal it is.
+                // maybe we want to begin rendering the original markdown so as to make comparison easy.
+                //
+                // either way, we'll likely need some sort of a 'TaskRegistry'.
+                // this is a hash table using the UID structure as key.
+                // it is importable into this file.
+                // the store is update from main.ts
+                // everyone else is readonly.
+                // so no need for mutex or anything like that.
+
+                
 
                 // Creates a CodeMirror transaction in order to update the document.
         /*        const transaction = state.update({
@@ -53,8 +100,7 @@ console.log("live_preview clk event");
                     },
                 });
                 this.view.dispatch(transaction);*/
-                console.log("the button has BEEN clicked");
-                return true;
+                
             }
         }
 

@@ -4,6 +4,11 @@ import { RRule } from 'rrule';
 
 import { newLivePreviewExtension } from './live_preview';
 
+import TaskRegistry from './TaskRegistry';
+
+// create the one true taskRegistry :D.
+const taskRegistry = TaskRegistry.getInstance();
+
 // ----------------- MVP: -----------------
 
 // HIGH VALUE TODOs:
@@ -38,65 +43,7 @@ const ESTIMATED_TIME_TO_COMPLETE_SYMBOL: string = "⏱️";
 const RECURRENCE_RULE_SYMBOL: string = "🔁";
 const START_TASK_TIMER_SYMBOL: string = "🏃‍♂️";
 
-class TaskExternal {
-  public  isDone: Boolean;
-  public  priority: number;                                    // 1 is the highest priority, any larger number is a lower priority.
-  public  tags: string[];                                      // a list of tags, distilled from the description.
-  public  originalMarkdown: string;                            // the original markdown task.
-  public  description: string;                                 // the description of the task.
-  public  estimatedTimeToComplete: number | null | undefined;  // the estimated time to complete the task, in minutes.
-  public  startDate: Moment | null;                            // the day on and after which the task is allowed to be scheduled.
-  public  scheduledDate: Moment | null;
-  public  dueDate: Moment | null;                              // the day on which that task must be completed EOD.
-  public  doneDate: Moment | null;         
-  
-  public  recurrenceRrule: RRule | undefined;                  ///< RRule as per the lib.
-  public  recurrenceReferenceDate: Moment | undefined | null;  ///< The date after which the recurrence rule applies, may be
-                                                                       ///  null if the RRule itself has a ref date,
-                                                                       ///  ex) "every Monday".
-
-  constructor({
-    isDone,
-    priority,
-    tags,
-    originalMarkdown,
-    description,
-    estimatedTimeToComplete,
-    startDate,
-    scheduledDate,
-    dueDate,
-    doneDate,
-    recurrenceRrule,
-    recurrenceReferenceDate,
-  } : {
-    isDone : Boolean,
-    priority : number,
-    tags : string[],
-    originalMarkdown : string,
-    description : string,
-    estimatedTimeToComplete : number | null | undefined,
-    startDate : Moment | null,
-    scheduledDate : Moment | null,
-    dueDate : Moment | null,
-    doneDate : Moment | null,
-    recurrenceRrule : RRule | null,
-    recurrenceReferenceDate : Moment | null,
-  }) {
-    this.isDone = isDone;
-    this.priority = priority;
-    this.tags = tags;
-    this.originalMarkdown = originalMarkdown;
-    this.description = description;
-    this.estimatedTimeToComplete = estimatedTimeToComplete;
-    this.startDate = CREATE_MOMENT(startDate);
-    this.scheduledDate = CREATE_MOMENT(scheduledDate);
-    this.dueDate = CREATE_MOMENT(dueDate);
-    this.doneDate = CREATE_MOMENT(doneDate);
-    this.recurrenceRrule = recurrenceRrule;
-    this.recurrenceReferenceDate = CREATE_MOMENT(recurrenceReferenceDate);
-  }
-
-}
+import {TaskUID, TaskExternal} from './types';
 
 enum ScheduleBlockType {
   TASK,
@@ -112,11 +59,13 @@ class ScheduleBlock {
   public readonly text: string;            // the text to be rendered.
   public readonly startTime: Moment;       // when the block begins.
   public readonly duration: number;        // how long the block lasts, in minutes.
-  constructor(type: ScheduleBlockType, text: string, startTime: Moment, duration: number) {
+  public readonly taskUID: TaskUID | null;        // the UID of the task that this block is associated with.
+  constructor(type: ScheduleBlockType, text: string, startTime: Moment, duration: number, taskUID: TaskUID) {
     this.type = type;
     this.text = text;
     this.startTime = startTime;
     this.duration = duration;
+    this.taskUID = taskUID;
   }
 }
 
@@ -162,13 +111,7 @@ function getTaskStartDate(task: TaskExternal) {
   return(getEarlierOfTwoDates(task.startDate, task.scheduledDate));
 }
 
-function CREATE_MOMENT(any? : any) {
-  if (any === undefined) {
-    return moment.utc();
-  }
-  if (any === null) return any;
-  return moment.utc(any);
-}
+import { CREATE_MOMENT } from './utils';
 
 const MIN_PER_HOUR = 60;
 const NOON = MIN_PER_HOUR * 12;
@@ -249,6 +192,10 @@ class ScheduleAlgorithm {
   }
 
   public makeSchedule(tasks: TaskExternal[]) : ScheduleBlock[] {
+
+    // ensure tasks are reset in registry.
+    taskRegistry.reset();
+
     // TODO: We need to add to the tasks plugin another piece of metadata for estimated time to complete.
     // This will be part of our priv extension.
     let timeNow = CREATE_MOMENT();
@@ -260,7 +207,7 @@ class ScheduleAlgorithm {
     let blocks: ScheduleBlock[] = [];
     let dateCursor = CREATE_MOMENT(today);
     let insertDateHeader = () => {
-      blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", CREATE_MOMENT(dateCursor), 0));
+      blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", CREATE_MOMENT(dateCursor), 0, null));
     }
     let minutesToString = (time: number) : string => {
       let hours = Math.floor(time / 60);
@@ -279,10 +226,10 @@ class ScheduleAlgorithm {
       let renderRecurrence = (task.recurrenceRrule) ? ` ${RECURRENCE_RULE_SYMBOL} ${task.recurrenceRrule.toText()}` : "";
         blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, 
         `${minutesToString(duration)} - ${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}`,
-        CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), duration));
+        CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), duration, task.uid));
     }
     let insertBreak = () => {
-      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), this.padding));
+      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), this.padding, null));
       timeCursor += this.padding;
       checkBoundary();
     }
@@ -304,7 +251,7 @@ class ScheduleAlgorithm {
       // but incase viewEnd ever changes, best to keep this here.
       if (CREATE_MOMENT(dateCursor).add(timeCursor, "minutes").isAfter(CREATE_MOMENT(this.viewEnd))) {
         // overwrite last added task as its extent exceeds the viewEnd.
-        blocks[blocks.length-1]=(new ScheduleBlock(ScheduleBlockType.EXIT, "", CREATE_MOMENT(this.viewEnd), 0));
+        blocks[blocks.length-1]=(new ScheduleBlock(ScheduleBlockType.EXIT, "", CREATE_MOMENT(this.viewEnd), 0, null));
         return true;
       }
 
@@ -327,6 +274,7 @@ class ScheduleAlgorithm {
           {
             let beginDate = getLaterOfTwoDates(task.recurrenceReferenceDate, CREATE_MOMENT(today));
             if (beginDate) {
+              taskRegistry.addTask(task); // ADD ORIGINAL TASK TO REGISTRY.
               tasks.splice(i, 1); // we want to remove this particular task from the array.
               let newTasks = task.recurrenceRrule.between(
                 beginDate.toDate(),
@@ -346,6 +294,7 @@ class ScheduleAlgorithm {
           continue; // don't increment i so as to land on next task which is now in slot just deleted.
         } else {
           tasks[i] = new TaskExternal({...task}); // clone to convert from local to UTC.
+          taskRegistry.addTask(tasks[i]);
         }
         i++;
       }
@@ -409,7 +358,7 @@ class ScheduleAlgorithm {
       }
       taskIdx++;
     }
-    blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), 0));
+    blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), 0, null));
     return blocks;
   }
 
@@ -485,6 +434,8 @@ export class ScheduleWriter {
             switch(block.type) {
               case ScheduleBlockType.TASK:
                 scheduleOut += `*${block.startTime.format("HH:mm")}* | [🥡](.) | ${block.text} [${START_TASK_TIMER_SYMBOL}](https://www.google.com/search?q=timer+${block.duration}+minutes)\n`;
+                const taskAfter = block.text.split('-')?.[1];
+                taskRegistry.addMapping(taskAfter, block.taskUID);                
                 break;
               case ScheduleBlockType.DATE_HEADER:
                 scheduleOut += `\n*${block.startTime.format("YYYY-MM-DD")}*:\n\n`;
@@ -579,6 +530,8 @@ tags do not include #someday
         }
       },
     });
+
+    taskRegistry.addApp(this.app);
 
     this.registerEditorExtension(newLivePreviewExtension()); // needed for getting clicks.
 
