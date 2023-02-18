@@ -9,7 +9,7 @@ export const newLivePreviewExtension = () => {
     return ViewPlugin.fromClass(LivePreviewExtension);
 };
 
-export const TASK_SYMBOL = '🥡';
+export const TASK_SYMBOL = 'X';
 
 class LivePreviewExtension implements PluginValue {
     private readonly view: EditorView;

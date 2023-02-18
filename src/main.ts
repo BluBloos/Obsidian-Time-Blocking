@@ -439,7 +439,7 @@ export class ScheduleWriter {
             let shouldExit = false;
             switch(block.type) {
               case ScheduleBlockType.TASK:
-                const completeBttn = block.taskUID ? `[${TASK_SYMBOL}${block.renderIdx}](.) | ` : ``;
+                const completeBttn = block.taskUID ? `[${TASK_SYMBOL}${block.renderIdx}](.) | ` : `  | `;
                 scheduleOut += `*${block.startTime.format("HH:mm")}* | ${completeBttn}${block.text} [${START_TASK_TIMER_SYMBOL}](https://www.google.com/search?q=timer+${block.duration}+minutes)\n`;
                 if (block.renderIdx >= 0) {
                   taskRegistry.addRenderIdxMapping(block.renderIdx, block.taskUID);
