@@ -60,17 +60,19 @@ enum ScheduleBlockType {
 class ScheduleBlock {
   public readonly type: ScheduleBlockType;   // the type of block.
   public readonly text: string;              // the text to be rendered.
+  public readonly textBare: string;          // the text to be rendered, without any symbols for the purpose of reflow.
   public readonly startTime: Moment;         // when the block begins.
   public readonly duration: number;          // how long the block lasts, in minutes.
   public readonly taskUID: TaskUID | null;   // the UID of the task that this block is associated with.
   public readonly renderIdx: number;         // the render index of the block. -1 is invalid.
-  constructor(type: ScheduleBlockType, text: string, startTime: Moment, duration: number, renderIdx: number, taskUID: TaskUID | null) {
+  constructor(type: ScheduleBlockType, text: string, textBare:string, startTime: Moment, duration: number, renderIdx: number, taskUID: TaskUID | null) {
     this.type = type;
     this.text = text;
     this.startTime = startTime;
     this.duration = duration;
     this.renderIdx = renderIdx;
     this.taskUID = taskUID;
+    this.textBare = textBare;
   }
 }
 
@@ -117,6 +119,12 @@ function getTaskStartDate(task: TaskExternal) {
 }
 
 import { CREATE_MOMENT } from './utils';
+
+function VISIBLE_COUNT(str:string) {
+  // TODO:
+  // https://cestoliv.com/blog/how-to-count-emojis-with-javascript/
+    return str.length;
+}
 
 const MIN_PER_HOUR = 60;
 const NOON = MIN_PER_HOUR * 12;
@@ -214,7 +222,7 @@ class ScheduleAlgorithm {
     let blocks: ScheduleBlock[] = [];
     let dateCursor = CREATE_MOMENT(today);
     let insertDateHeader = () => {
-      blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", CREATE_MOMENT(dateCursor), 0, -1, null));
+      blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", "",CREATE_MOMENT(dateCursor), 0, -1, null));
     }
     let minutesToString = (time: number) : string => {
       let hours = Math.floor(time / 60);
@@ -231,14 +239,16 @@ class ScheduleAlgorithm {
       let renderEstimatedTimeToComplete =
         (task.estimatedTimeToComplete) ? ` ${ESTIMATED_TIME_TO_COMPLETE_SYMBOL} ${minutesToString(task.estimatedTimeToComplete)}` : "";
       let shortPath = task.uid.path.split("/").slice(-1)[0];
-      let renderBacklink = ` ${BACKLINK_SYMBOL} [${shortPath}](${task.uid.path.replace(' ', '%20')})`;
+      let renderBacklink = ` ${BACKLINK_SYMBOL} [${shortPath}](${task.uid.path.replace(/ /g, (m)=>'%20')})`;
+      let renderBacklinkBare = ` ${BACKLINK_SYMBOL} ${shortPath}`;
       let renderRecurrence = (task.recurrenceRrule) ? ` ${RECURRENCE_RULE_SYMBOL} ${task.recurrenceRrule.toText()}` : "";
-        blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, 
-        `${minutesToString(duration)} - ${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklink}`,
+      let taskText = `${minutesToString(duration)} - ${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklink}`;
+      let taskTextBare = `${minutesToString(duration)} - ${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklinkBare}`;
+      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, taskText, taskTextBare,
         CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), duration, runningTaskIdx++, task.uid));
     }
     let insertBreak = () => {
-      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), this.padding, -1, null));
+      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", "BREAK",CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), this.padding, -1, null));
       timeCursor += this.padding;
       checkBoundary();
     }
@@ -260,7 +270,7 @@ class ScheduleAlgorithm {
       // but incase viewEnd ever changes, best to keep this here.
       if (CREATE_MOMENT(dateCursor).add(timeCursor, "minutes").isAfter(CREATE_MOMENT(this.viewEnd))) {
         // overwrite last added task as its extent exceeds the viewEnd.
-        blocks[blocks.length-1]=(new ScheduleBlock(ScheduleBlockType.EXIT, "", CREATE_MOMENT(this.viewEnd), 0, -1, null));
+        blocks[blocks.length-1]=(new ScheduleBlock(ScheduleBlockType.EXIT, "", "",CREATE_MOMENT(this.viewEnd), 0, -1, null));
         return true;
       }
 
@@ -367,7 +377,7 @@ class ScheduleAlgorithm {
       }
       taskIdx++;
     }
-    blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), 0, -1, null));
+    blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN","FIN", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), 0, -1, null));
     return blocks;
   }
 
@@ -442,11 +452,46 @@ export class ScheduleWriter {
             let shouldExit = false;
             switch(block.type) {
               case ScheduleBlockType.TASK:
+                const maxTaskChars = 67;
                 const completeBttn = block.taskUID ? `[${TASK_SYMBOL}${block.renderIdx}](.) | ` : `  | `;
+                const completeBttnBare = block.taskUID ? `${TASK_SYMBOL} | ` : `  | `;
                 const timer = (block.duration>0)?
                   `-> [${START_TASK_TIMER_SYMBOL}](https://www.google.com/search?q=timer+${block.duration}+minutes)`: "";
-                scheduleOut += `*${block.startTime.format("HH:mm")}* | ${completeBttn}${block.text} ` +
-                 `${timer}\n`;
+                const timerBare = (block.duration>0)?
+                  `-> ${START_TASK_TIMER_SYMBOL}`: "";
+                const renderLineBeginBare = `${block.startTime.format("HH:mm")} | ${completeBttnBare}`;
+                const renderLineBegin = `*${block.startTime.format("HH:mm")}* | ${completeBttn}`;
+                const indentLen = VISIBLE_COUNT(renderLineBeginBare);
+                let renderLineTask = `${renderLineBegin}${block.text} ${timer}`;
+                let renderLineTaskBare = `${renderLineBeginBare}${block.textBare} ${timerBare}`;
+                // reflow toWriteToSchedule by maxTaskChars and indentLen.
+                //console.log('renderLineTask', renderLineTask);
+                //console.log('renderLineTaskBare', renderLineTaskBare);
+                {
+                  if (VISIBLE_COUNT(renderLineTaskBare) > maxTaskChars) {
+                    let reflowed = "";
+                    let line = "";
+                    let lineCount = 0;
+                    let words = renderLineTask.split(" ");
+                    console.log('words', words);
+                    let wordsBare = renderLineTaskBare.split(" ");
+                    console.log('wordsBare', wordsBare);
+                    for (let j = 0; j < words.length && j < wordsBare.length; j++) {
+                      if (lineCount + (VISIBLE_COUNT(wordsBare[j]) + 1) > maxTaskChars) {
+                        reflowed += line + "\n";
+                        line = " ".repeat(indentLen);
+                        lineCount = 0;
+                      }
+                      line += words[j] + " ";
+                      lineCount += VISIBLE_COUNT(wordsBare[j]) + 1;
+                    }
+                    if (VISIBLE_COUNT(line) > 0) {
+                      reflowed += line;
+                    }
+                    renderLineTask = reflowed + "\n"; // ones that wrap get extra newlines.
+                  }
+                }
+                scheduleOut += renderLineTask + "\n";
                 if (block.renderIdx >= 0) {
                   taskRegistry.addRenderIdxMapping(block.renderIdx, block.taskUID);
                 }
