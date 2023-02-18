@@ -48,13 +48,8 @@ class LivePreviewExtension implements PluginValue {
         if (app) {
             const TasksPlugin = app.plugins.plugins["obsidian-tasks-plugin"];
             const TasksTask = TasksPlugin.taskFromTaskExternal(task);
-            const toggledTask = new TaskExternal({
-                ...task,
-                isDone: !task.isDone
-            });
-            const TaskToggledTask = TasksPlugin.taskFromTaskExternal(toggledTask);
-
-            TasksPlugin.replaceTaskWithTasks(TasksTask, [TaskToggledTask]);
+            const toggledTasks = TasksTask.toggle();
+            TasksPlugin.replaceTaskWithTasks(TasksTask, toggledTasks);
 
             // NOTE: dirty hack, we're going to wait for like 1s here before re-render because apparently we cannot wait
             // on the replace task call ...
