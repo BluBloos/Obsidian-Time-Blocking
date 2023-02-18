@@ -443,8 +443,10 @@ export class ScheduleWriter {
             switch(block.type) {
               case ScheduleBlockType.TASK:
                 const completeBttn = block.taskUID ? `[${TASK_SYMBOL}${block.renderIdx}](.) | ` : `  | `;
+                const timer = (block.duration>0)?
+                  `-> [${START_TASK_TIMER_SYMBOL}](https://www.google.com/search?q=timer+${block.duration}+minutes)`: "";
                 scheduleOut += `*${block.startTime.format("HH:mm")}* | ${completeBttn}${block.text} ` +
-                 `[${START_TASK_TIMER_SYMBOL}](https://www.google.com/search?q=timer+${block.duration}+minutes)\n`;
+                 `${timer}\n`;
                 if (block.renderIdx >= 0) {
                   taskRegistry.addRenderIdxMapping(block.renderIdx, block.taskUID);
                 }
