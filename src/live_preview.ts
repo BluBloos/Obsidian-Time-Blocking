@@ -1,5 +1,5 @@
-import { EditorView, ViewPlugin } from '@codemirror/view';
-import type { PluginValue } from '@codemirror/view';
+import { EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
+import type { PluginValue  } from '@codemirror/view';
 
 import TaskRegistry from './TaskRegistry';
 import { TaskExternal } from './types';
@@ -13,49 +13,39 @@ const TASK_SYMBOL = '🥡';
 
 class LivePreviewExtension implements PluginValue {
     private readonly view: EditorView;
-    //private readonly observer: MutationObserver;
+
+    public update(update: ViewUpdate) {
+        console.log("live_preview update", update);
+        this.updateDecorations(update.view);
+    }
+
+    updateDecorations(view : EditorView) {
+        const dom = view.dom;
+        // find all HTMLSpanElements with class cm-underline.
+        const cmUnderlines : HTMLSpanElement[] = dom.querySelectorAll('span.cm-underline');
+        // make sure includes TASK_SYMBOL.
+        for (const cmUnderline of cmUnderlines) {
+            if (cmUnderline.innerText.includes(TASK_SYMBOL)) {
+                cmUnderline.innerText=TASK_SYMBOL;
+            }
+        }
+      }
+
     constructor(view: EditorView) {
-
-        /*this.view.requestMeasure({
-            read: (view: EditorView) : HTMLSpanElement[] => {
-                const dom = view.dom;
-                // find all HTMLSpanElements with class cm-underline.
-                const cmUnderlines : HTMLSpanElement[] = dom.querySelectorAll('span.cm-underline');
-                // make sure includes TASK_SYMBOL.
-                const cmUnderlinesWithTaskSymbol = Array.from(cmUnderlines).filter((cmUnderline : HTMLSpanElement) => {
-                    return cmUnderline.innerText.includes(TASK_SYMBOL);
-                });
-                return cmUnderlinesWithTaskSymbol;
-            },
-            write: (measure: HTMLSpanElement[], view: EditorView) => {
-                console.log("measure", measure);
-            },
-            key: 'obsidian-tasks-plugin'
-        });*/
-
         this.view = view;
         this.handleClickEvent = this.handleClickEvent.bind(this);
         this.view.dom.addEventListener('click', this.handleClickEvent);
-/*
-        // listen for DOM changes.
-        // we want to silently remove the render of the UID :)
-        const targetNode = this.view.dom;
-        const config = { characterData:true, subtree: true };
-        const callback = (mutationList : any, observer : MutationObserver) => {
-            console.log("live_preview mutationList", mutationList);
-            // TODO: check if any of the links changed. if they did, need to re-render.
-          };
-        this.observer = new MutationObserver(callback);
-        this.observer.observe(targetNode, config);*/
+        this.updateDecorations(view);
     }
+
     public destroy(): void {
         this.view.dom.removeEventListener('click', this.handleClickEvent);
         //this.observer.disconnect();
     }
 
     private handleClickEvent(event: MouseEvent): boolean {
-        
-console.log("live_preview clk event");
+
+        console.log("live_preview clk event");
         const { target } = event;
 
         console.log(target);
@@ -64,6 +54,8 @@ console.log("live_preview clk event");
         if (!target || !(target instanceof HTMLSpanElement)) {
             return false;
         }
+
+        return false; // we do this for now as hack.
 
         // TODO: match a regex.
         if (target.innerText.includes(TASK_SYMBOL) && target.classList.contains('cm-underline')) {

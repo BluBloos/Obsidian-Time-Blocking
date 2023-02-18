@@ -533,7 +533,7 @@ tags do not include #someday
 
     taskRegistry.addApp(this.app);
 
-    //this.registerEditorExtension(newLivePreviewExtension()); // needed for getting clicks.
+    this.registerEditorExtension(newLivePreviewExtension()); // needed for getting task complete clicks
 
     console.log("done loading Obsidian-Time-Blocking plugin.");
   }
