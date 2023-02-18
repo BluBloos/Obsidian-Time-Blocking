@@ -44,6 +44,7 @@ const SCHEDULED_START_DATE_SYMBOL : string = /*plane */ "🛫";
 const ESTIMATED_TIME_TO_COMPLETE_SYMBOL: string = "⏱️";
 const RECURRENCE_RULE_SYMBOL: string = "🔁";
 const START_TASK_TIMER_SYMBOL: string = "🏃‍♂️";
+const BACKLINK_SYMBOL: string = "🔗";
 
 import {TaskUID, TaskExternal} from './types';
 
@@ -229,9 +230,11 @@ class ScheduleAlgorithm {
       let renderStartDate = (task.startDate) ? ` ${SCHEDULED_START_DATE_SYMBOL} ${task.startDate.format("YYYY-MM-DD")}` : "";
       let renderEstimatedTimeToComplete =
         (task.estimatedTimeToComplete) ? ` ${ESTIMATED_TIME_TO_COMPLETE_SYMBOL} ${minutesToString(task.estimatedTimeToComplete)}` : "";
+      let shortPath = task.uid.path.split("/").slice(-1)[0];
+      let renderBacklink = ` ${BACKLINK_SYMBOL} [${shortPath}](${task.uid.path.replace(' ', '%20')})`;
       let renderRecurrence = (task.recurrenceRrule) ? ` ${RECURRENCE_RULE_SYMBOL} ${task.recurrenceRrule.toText()}` : "";
         blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, 
-        `${minutesToString(duration)} - ${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}`,
+        `${minutesToString(duration)} - ${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklink}`,
         CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), duration, runningTaskIdx++, task.uid));
     }
     let insertBreak = () => {
@@ -440,7 +443,8 @@ export class ScheduleWriter {
             switch(block.type) {
               case ScheduleBlockType.TASK:
                 const completeBttn = block.taskUID ? `[${TASK_SYMBOL}${block.renderIdx}](.) | ` : `  | `;
-                scheduleOut += `*${block.startTime.format("HH:mm")}* | ${completeBttn}${block.text} [${START_TASK_TIMER_SYMBOL}](https://www.google.com/search?q=timer+${block.duration}+minutes)\n`;
+                scheduleOut += `*${block.startTime.format("HH:mm")}* | ${completeBttn}${block.text} ` +
+                 `[${START_TASK_TIMER_SYMBOL}](https://www.google.com/search?q=timer+${block.duration}+minutes)\n`;
                 if (block.renderIdx >= 0) {
                   taskRegistry.addRenderIdxMapping(block.renderIdx, block.taskUID);
                 }
