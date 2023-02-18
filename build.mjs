@@ -10,7 +10,7 @@ If you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === 'production');
-
+console.log("prod: ", prod);
 esbuild.build({
 	banner: { js: banner,},
 	entryPoints: ['src/main.ts'],
@@ -38,6 +38,7 @@ esbuild.build({
 	format: 'cjs', /* as pertaining to output javascript */
 	target: 'es2016', /* as pertaining to output javascript */
 	logLevel: "info",
+	minify: prod ? true : false,
 	sourcemap: prod ? false : 'inline',
 	treeShaking: true, /* get ride of unused code ... */
 	outfile: 'bin/main.js',

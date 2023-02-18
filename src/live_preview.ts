@@ -1,6 +1,7 @@
 import { EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
 import type { PluginValue  } from '@codemirror/view';
 
+import { renderTimeblocking } from './main';
 import TaskRegistry from './TaskRegistry';
 import { TaskExternal } from './types';
 const taskRegistry = TaskRegistry.getInstance();
@@ -42,6 +43,27 @@ class LivePreviewExtension implements PluginValue {
         //this.observer.disconnect();
     }
 
+    private async replaceTask(task: TaskExternal) {
+        const app = taskRegistry.getApp();
+        if (app) {
+            const TasksPlugin = app.plugins.plugins["obsidian-tasks-plugin"];
+            const TasksTask = TasksPlugin.taskFromTaskExternal(task);
+            const toggledTask = new TaskExternal({
+                ...task,
+                isDone: !task.isDone
+            });
+            const TaskToggledTask = TasksPlugin.taskFromTaskExternal(toggledTask);
+
+            TasksPlugin.replaceTaskWithTasks(TasksTask, [TaskToggledTask]);
+
+            // NOTE: dirty hack, we're going to wait for like 1s here before re-render because apparently we cannot wait
+            // on the replace task call ...
+            setTimeout(() => {
+                renderTimeblocking(app);
+            }, 1000);
+        }
+    }
+
     private handleClickEvent(event: MouseEvent): boolean {
 
         console.log("live_preview clk event");
@@ -60,6 +82,8 @@ class LivePreviewExtension implements PluginValue {
             const parent = target.parentElement;
             if (parent && parent.classList.contains('cm-link')) {
 
+                console.log("the button has BEEN clicked");
+
                 // get line that was clicked.
                 const { state } = this.view;
                 const position = this.view.posAtDOM(target);
@@ -71,31 +95,11 @@ class LivePreviewExtension implements PluginValue {
                 // don't navigate the link.
                 event.preventDefault();
 
-                
-
-                if (taskRegistry.getApp()) {
-                    const TasksPlugin = taskRegistry.getApp().plugins.plugins["obsidian-tasks-plugin"];
-
-                    //const renderIdx = target.innerText.replace(TASK_SYMBOL, '');
-                    const task = taskRegistry.getTaskFromRenderIdx(renderIdx);
-                    if (task) {
-                        console.log('task from registry', task);
-
-/*                      const TasksTask = TasksPlugin.taskFromTaskExternal(task);
-                        const toggledTask = new TaskExternal({
-                            ...task,
-                            isDone: !task.isDone
-                        });
-                        const TaskToggledTask = TasksPlugin.taskFromTaskExternal(toggledTask);
-                        
-                        TasksPlugin.replaceTaskWithTasks(TasksTask, [TaskToggledTask]);
-                        */
-    
-    // TODO: now we want to re-render our plugin.
-    
-                        console.log("the button has BEEN clicked");
-                        
-                    }
+                //const renderIdx = target.innerText.replace(TASK_SYMBOL, '');
+                const task = taskRegistry.getTaskFromRenderIdx(renderIdx);
+                if (task) {
+                    console.log('task from registry', task);
+                    this.replaceTask(task);
                 }
 
                 return true;

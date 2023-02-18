@@ -480,11 +480,43 @@ export class ScheduleWriter {
   }
 };
 
+export function renderTimeblocking(app : App, leafView : MarkdownView | null) {
+  const plugin = app.plugins.plugins["obsidian-time-blocking"];
+  const scheduleAlgorithm = plugin.scheduleAlgorithm;
+  const scheduleWriter = plugin.scheduleWriter;
+
+  // maybe need to find leafView
+  if (!leafView) {
+    leafView = app.workspace.getActiveViewOfType(MarkdownView);
+  }
+
+  if (!leafView) {
+    console.error("Obsidian-Time-Blocking: No active leaf view found, aborting render.");
+    return;
+  }
+
+  this.app.plugins.plugins["obsidian-tasks-plugin"].oneHotResolveQueryToTasks(
+`not done 
+description includes TODO 
+path does not include TODO Template
+path does not include Weekly Journal Template
+tags do not include #someday
+`
+  ).then((tasks : TaskExternal[]) => {
+    console.log("Obsidian-Time-Blocking: ", tasks);
+    let tempTasks = Array.from(tasks);
+    let blocks : ScheduleBlock[] = scheduleAlgorithm.makeSchedule(tempTasks);
+    scheduleWriter.writeSchedule(leafView, blocks);
+  });
+}
+
 export default class ObsidianTimeBlocking extends Plugin {
 
   settings: ObsidianTimeBlockingSettings;
-  private scheduleWriter: ScheduleWriter;
-  private scheduleAlgorithm: ScheduleAlgorithm;
+  
+  // TODO: make not public. bad design.
+  public scheduleWriter: ScheduleWriter;
+  public scheduleAlgorithm: ScheduleAlgorithm;
 
   async unload(): Promise<void> {
     this.app.workspace.off("active-leaf-change", (leaf: WorkspaceLeaf) => {});
@@ -504,21 +536,7 @@ export default class ObsidianTimeBlocking extends Plugin {
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", (leaf: WorkspaceLeaf) => {
         if (leaf.view instanceof MarkdownView) {
-          //console.log("leaf.view",leaf.view);
-
-          this.app.plugins.plugins["obsidian-tasks-plugin"].oneHotResolveQueryToTasks(
-`not done 
-description includes TODO 
-path does not include TODO Template
-path does not include Weekly Journal Template
-tags do not include #someday
-`
-          ).then((tasks : TaskExternal[]) => {
-            console.log("Obsidian-Time-Blocking: ", tasks);
-            let tempTasks = Array.from(tasks);
-            let blocks : ScheduleBlock[] = this.scheduleAlgorithm.makeSchedule(tempTasks);
-            this.scheduleWriter.writeSchedule(leaf.view, blocks);
-          });
+          renderTimeblocking(this.app, leaf.view);
         }
       })
     );
