@@ -6,6 +6,8 @@ import { newLivePreviewExtension } from './live_preview';
 
 import TaskRegistry from './TaskRegistry';
 
+import { TASK_SYMBOL } from './live_preview';
+
 // create the one true taskRegistry :D.
 const taskRegistry = TaskRegistry.getInstance();
 
@@ -14,7 +16,7 @@ const taskRegistry = TaskRegistry.getInstance();
 // HIGH VALUE TODOs:
 // TODO: mark a task as complete:
 //
-// using the takeout box emoji -> 🥡
+// using TASK_SYMBOL emoji
 // as the button.
 // we'll get the task from the line,
 // then use Task.fromLine to get a Task data structure.
@@ -55,16 +57,18 @@ enum ScheduleBlockType {
 /// it is meant to be consumed by the ScheduleWriter for rendering
 /// the schedule.
 class ScheduleBlock {
-  public readonly type: ScheduleBlockType; // the type of block.
-  public readonly text: string;            // the text to be rendered.
-  public readonly startTime: Moment;       // when the block begins.
-  public readonly duration: number;        // how long the block lasts, in minutes.
-  public readonly taskUID: TaskUID | null;        // the UID of the task that this block is associated with.
-  constructor(type: ScheduleBlockType, text: string, startTime: Moment, duration: number, taskUID: TaskUID) {
+  public readonly type: ScheduleBlockType;   // the type of block.
+  public readonly text: string;              // the text to be rendered.
+  public readonly startTime: Moment;         // when the block begins.
+  public readonly duration: number;          // how long the block lasts, in minutes.
+  public readonly taskUID: TaskUID | null;   // the UID of the task that this block is associated with.
+  public readonly renderIdx: number;         // the render index of the block. -1 is invalid.
+  constructor(type: ScheduleBlockType, text: string, startTime: Moment, duration: number, renderIdx: number, taskUID: TaskUID | null) {
     this.type = type;
     this.text = text;
     this.startTime = startTime;
     this.duration = duration;
+    this.renderIdx = renderIdx;
     this.taskUID = taskUID;
   }
 }
@@ -192,6 +196,8 @@ class ScheduleAlgorithm {
   }
 
   public makeSchedule(tasks: TaskExternal[]) : ScheduleBlock[] {
+    
+    let runningTaskIdx = 0;
 
     // ensure tasks are reset in registry.
     taskRegistry.reset();
@@ -207,7 +213,7 @@ class ScheduleAlgorithm {
     let blocks: ScheduleBlock[] = [];
     let dateCursor = CREATE_MOMENT(today);
     let insertDateHeader = () => {
-      blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", CREATE_MOMENT(dateCursor), 0, null));
+      blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", CREATE_MOMENT(dateCursor), 0, -1, null));
     }
     let minutesToString = (time: number) : string => {
       let hours = Math.floor(time / 60);
@@ -226,10 +232,10 @@ class ScheduleAlgorithm {
       let renderRecurrence = (task.recurrenceRrule) ? ` ${RECURRENCE_RULE_SYMBOL} ${task.recurrenceRrule.toText()}` : "";
         blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, 
         `${minutesToString(duration)} - ${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}`,
-        CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), duration, task.uid));
+        CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), duration, runningTaskIdx++, task.uid));
     }
     let insertBreak = () => {
-      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), this.padding, null));
+      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), this.padding, -1, null));
       timeCursor += this.padding;
       checkBoundary();
     }
@@ -251,7 +257,7 @@ class ScheduleAlgorithm {
       // but incase viewEnd ever changes, best to keep this here.
       if (CREATE_MOMENT(dateCursor).add(timeCursor, "minutes").isAfter(CREATE_MOMENT(this.viewEnd))) {
         // overwrite last added task as its extent exceeds the viewEnd.
-        blocks[blocks.length-1]=(new ScheduleBlock(ScheduleBlockType.EXIT, "", CREATE_MOMENT(this.viewEnd), 0, null));
+        blocks[blocks.length-1]=(new ScheduleBlock(ScheduleBlockType.EXIT, "", CREATE_MOMENT(this.viewEnd), 0, -1, null));
         return true;
       }
 
@@ -358,7 +364,7 @@ class ScheduleAlgorithm {
       }
       taskIdx++;
     }
-    blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), 0, null));
+    blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), 0, -1, null));
     return blocks;
   }
 
@@ -433,9 +439,11 @@ export class ScheduleWriter {
             let shouldExit = false;
             switch(block.type) {
               case ScheduleBlockType.TASK:
-                scheduleOut += `*${block.startTime.format("HH:mm")}* | [🥡](.) | ${block.text} [${START_TASK_TIMER_SYMBOL}](https://www.google.com/search?q=timer+${block.duration}+minutes)\n`;
-                const taskAfter = block.text.split('-')?.[1];
-                taskRegistry.addMapping(taskAfter, block.taskUID);                
+                const completeBttn = block.taskUID ? `[${TASK_SYMBOL}${block.renderIdx}](.) | ` : ``;
+                scheduleOut += `*${block.startTime.format("HH:mm")}* | ${completeBttn}${block.text} [${START_TASK_TIMER_SYMBOL}](https://www.google.com/search?q=timer+${block.duration}+minutes)\n`;
+                if (block.renderIdx >= 0) {
+                  taskRegistry.addRenderIdxMapping(block.renderIdx, block.taskUID);
+                }
                 break;
               case ScheduleBlockType.DATE_HEADER:
                 scheduleOut += `\n*${block.startTime.format("YYYY-MM-DD")}*:\n\n`;

@@ -8,16 +8,16 @@ class TaskRegistry {
   private app: App;
   private static instance: TaskRegistry;
   private tasks: Map<TaskUID, TaskExternal>;
-  private sourceLineToUidMap: Map<string, TaskUID>;
+  private renderIdxToUID: Map<number, TaskUID>;
 
   private constructor() {
     this.tasks = new Map();
-    this.sourceLineToUidMap = new Map();
+    this.renderIdxToUID = new Map();
   }
 
   public reset() {
     this.tasks = new Map();
-    this.sourceLineToUidMap = new Map();
+    this.renderIdxToUID = new Map();
   }
 
   public static getInstance(): TaskRegistry {
@@ -27,8 +27,8 @@ class TaskRegistry {
     return TaskRegistry.instance;
   }
 
-  public addMapping(line: string, uid: TaskUID): void {
-    this.sourceLineToUidMap.set(line, uid);
+  public addRenderIdxMapping(idx: number, uid: TaskUID): void {
+    this.renderIdxToUID.set(idx, uid);
   }
 
   public addTask(task: TaskExternal): void {
@@ -39,8 +39,8 @@ class TaskRegistry {
     return this.tasks.get(uid);
   }
 
-  public getTaskFromRenderedLine(line: string): TaskExternal | undefined {
-    const uid = this.sourceLineToUidMap.get(line);
+  public getTaskFromRenderIdx(idx: number): TaskExternal | undefined {
+    const uid = this.renderIdxToUID.get(idx);
     if (uid) {
       return this.getTask(uid);
     }

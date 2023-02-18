@@ -9,13 +9,12 @@ export const newLivePreviewExtension = () => {
     return ViewPlugin.fromClass(LivePreviewExtension);
 };
 
-const TASK_SYMBOL = '🥡';
+export const TASK_SYMBOL = '🥡';
 
 class LivePreviewExtension implements PluginValue {
     private readonly view: EditorView;
 
     public update(update: ViewUpdate) {
-        console.log("live_preview update", update);
         this.updateDecorations(update.view);
     }
 
@@ -55,37 +54,34 @@ class LivePreviewExtension implements PluginValue {
             return false;
         }
 
-        return false; // we do this for now as hack.
-
         // TODO: match a regex.
         if (target.innerText.includes(TASK_SYMBOL) && target.classList.contains('cm-underline')) {
             // get the parent.
             const parent = target.parentElement;
             if (parent && parent.classList.contains('cm-link')) {
+
                 // get line that was clicked.
                 const { state } = this.view;
                 const position = this.view.posAtDOM(target);
                 const line = state.doc.lineAt(position);
+                console.log("line", line);
+                const regex = new RegExp(`${TASK_SYMBOL}(\\d+)`, 'u');
+                const renderIdx = parseInt(line.text.match(regex)?.[1]??'-1');
+
                 // don't navigate the link.
                 event.preventDefault();
 
-                console.log("line", line);
                 
-                // 1. get task part of the line.
-                // the task part of the line comes after the first '-'.
-                // write code below:
-                const taskPart = line.text.split('-')[1];
 
-                console.log("taskPart", taskPart);
-
-                if (taskPart && taskRegistry.getApp()) {
+                if (taskRegistry.getApp()) {
                     const TasksPlugin = taskRegistry.getApp().plugins.plugins["obsidian-tasks-plugin"];
 
-                    // TODO: lol, of course this doesn't work - I'm not adding anything to the registry yet.
-                    const task = taskRegistry.getTaskFromRenderedLine(taskPart);
+                    //const renderIdx = target.innerText.replace(TASK_SYMBOL, '');
+                    const task = taskRegistry.getTaskFromRenderIdx(renderIdx);
                     if (task) {
                         console.log('task from registry', task);
-                        const TasksTask = TasksPlugin.taskFromTaskExternal(task);
+
+/*                      const TasksTask = TasksPlugin.taskFromTaskExternal(task);
                         const toggledTask = new TaskExternal({
                             ...task,
                             isDone: !task.isDone
@@ -93,6 +89,7 @@ class LivePreviewExtension implements PluginValue {
                         const TaskToggledTask = TasksPlugin.taskFromTaskExternal(toggledTask);
                         
                         TasksPlugin.replaceTaskWithTasks(TasksTask, [TaskToggledTask]);
+                        */
     
     // TODO: now we want to re-render our plugin.
     
