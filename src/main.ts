@@ -416,8 +416,7 @@ class ScheduleAlgorithm {
     blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN","FIN", moment(dateCursor).add(timeCursor, "minutes"), 0, -1, null));
     return new Schedule(blocks, {
       items: [
-        {what: "Can I get everything done?"},
-        {value: canGetEverythingDone}
+        {what: "Can I get everything done?", value: canGetEverythingDone},
       ]
     });
   }
