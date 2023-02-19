@@ -417,6 +417,7 @@ class ScheduleAlgorithm {
     return new Schedule(blocks, {
       items: [
         {what: "Can I get everything done?", value: canGetEverythingDone},
+        {what: "Last generated time", value: moment().format("HH:mm:ss")},
       ]
     });
   }
