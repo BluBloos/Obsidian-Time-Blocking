@@ -149,7 +149,7 @@ class ScheduleAlgorithm {
   private readonly scheduleAlgo = (tasks : TaskExternal[]) => {
     const priorityAlgo = (task: TaskExternal) => {
       if (task.dueDate) {
-        const timeUntilDue = task.dueDate.diff(CREATE_MOMENT(), "hours");
+        const timeUntilDue = task.dueDate.diff(moment(), "hours");
         if (timeUntilDue <= 24) return 1;
         if (timeUntilDue <= 24 * 14) return 2; // my personal rule is if within next 2 weeks, it's effectively P1, but not quite.
       }
@@ -213,16 +213,16 @@ class ScheduleAlgorithm {
 
     // TODO: We need to add to the tasks plugin another piece of metadata for estimated time to complete.
     // This will be part of our priv extension.
-    let timeNow = CREATE_MOMENT();
-    let today = CREATE_MOMENT(timeNow.format("YYYY-MM-DD"));
+    let timeNow = moment();
+    let today = moment(timeNow.format("YYYY-MM-DD"));
     let alignUp = (from: number, alignment: number) => {
       return Math.ceil(from / alignment) * alignment;
     }
     let timeCursor = alignUp(Math.max(this.scheduleBegin, timeNow.diff(today, "minutes")), this.blockStepSize);
     let blocks: ScheduleBlock[] = [];
-    let dateCursor = CREATE_MOMENT(today);
+    let dateCursor = moment(today);
     let insertDateHeader = () => {
-      blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", "",CREATE_MOMENT(dateCursor), 0, -1, null));
+      blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", "",moment(dateCursor), 0, -1, null));
     }
     let minutesToString = (time: number) : string => {
       let hours = Math.floor(time / 60);
@@ -245,10 +245,10 @@ class ScheduleAlgorithm {
       let taskText = `${minutesToString(duration)} - ${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklink}`;
       let taskTextBare = `${minutesToString(duration)} - ${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklinkBare}`;
       blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, taskText, taskTextBare,
-        CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), duration, runningTaskIdx++, task.uid));
+        moment(dateCursor).add(timeCursor, "minutes"), duration, runningTaskIdx++, task.uid));
     }
     let insertBreak = () => {
-      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", "BREAK",CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), this.padding, -1, null));
+      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", "BREAK",moment(dateCursor).add(timeCursor, "minutes"), this.padding, -1, null));
       timeCursor += this.padding;
       checkBoundary();
     }
@@ -268,9 +268,9 @@ class ScheduleAlgorithm {
       // viewEnd is always at the beginning of a day at the time of writing this comment.
       // so we could put this within the above if.
       // but incase viewEnd ever changes, best to keep this here.
-      if (CREATE_MOMENT(dateCursor).add(timeCursor, "minutes").isAfter(CREATE_MOMENT(this.viewEnd))) {
+      if (moment(dateCursor).add(timeCursor, "minutes").isAfter(moment(this.viewEnd))) {
         // overwrite last added task as its extent exceeds the viewEnd.
-        blocks[blocks.length-1]=(new ScheduleBlock(ScheduleBlockType.EXIT, "", "",CREATE_MOMENT(this.viewEnd), 0, -1, null));
+        blocks[blocks.length-1]=(new ScheduleBlock(ScheduleBlockType.EXIT, "", "",moment(this.viewEnd), 0, -1, null));
         return true;
       }
 
@@ -291,7 +291,7 @@ class ScheduleAlgorithm {
         let task : TaskExternal = tasks[i];
         if (task.recurrenceRrule) {
           {
-            let beginDate = getLaterOfTwoDates(task.recurrenceReferenceDate, CREATE_MOMENT(today));
+            let beginDate = getLaterOfTwoDates(CREATE_MOMENT(task.recurrenceReferenceDate), CREATE_MOMENT(today));
             if (beginDate) {
               taskRegistry.addTask(task); // ADD ORIGINAL TASK TO REGISTRY.
               tasks.splice(i, 1); // we want to remove this particular task from the array.
@@ -301,8 +301,11 @@ class ScheduleAlgorithm {
                 true // inclusive
               )
               for (let date of newTasks) {
-                let newTask = new TaskExternal({...task}); // TODO: does this work?
-                newTask.scheduledDate = CREATE_MOMENT(date);
+                let newTask = new TaskExternal({...task});
+                // NOTE: THE BOTTOM LINE: Returned "UTC" dates are always meant to be interpreted as dates in your local timezone.
+                // This may mean you have to do additional conversion to get the "correct" local time with offset applied.
+                // ^ direct from the RRULE lib docs. Hence the line below:
+                newTask.scheduledDate = moment(`${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`);
                 tasks.push(newTask); // OK, because everything will get re-order right after.
               }
             } else {
@@ -377,7 +380,7 @@ class ScheduleAlgorithm {
       }
       taskIdx++;
     }
-    blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN","FIN", CREATE_MOMENT(dateCursor).add(timeCursor, "minutes"), 0, -1, null));
+    blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN","FIN", moment(dateCursor).add(timeCursor, "minutes"), 0, -1, null));
     return blocks;
   }
 

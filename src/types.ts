@@ -1,6 +1,6 @@
 import type { Moment } from 'moment/moment';
 import { RRule } from 'rrule';
-import { CREATE_MOMENT } from './utils';
+import { CREATE_MOMENT_LOCAL } from './utils';
 
 export class TaskUID {
     public readonly path: string; // file path
@@ -67,12 +67,12 @@ export class TaskExternal {
       this.originalMarkdown = originalMarkdown;
       this.description = description;
       this.estimatedTimeToComplete = estimatedTimeToComplete;
-      this.startDate = CREATE_MOMENT(startDate);
-      this.scheduledDate = CREATE_MOMENT(scheduledDate);
-      this.dueDate = CREATE_MOMENT(dueDate);
-      this.doneDate = CREATE_MOMENT(doneDate);
+      this.startDate = CREATE_MOMENT_LOCAL(startDate);
+      this.scheduledDate = CREATE_MOMENT_LOCAL(scheduledDate);
+      this.dueDate = CREATE_MOMENT_LOCAL(dueDate);
+      this.doneDate = CREATE_MOMENT_LOCAL(doneDate);
       this.recurrenceRrule = recurrenceRrule;
-      this.recurrenceReferenceDate = CREATE_MOMENT(recurrenceReferenceDate);
+      this.recurrenceReferenceDate = CREATE_MOMENT_LOCAL(recurrenceReferenceDate);
       this.uid = uid;
     }
   
