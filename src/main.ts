@@ -205,6 +205,15 @@ class ScheduleSettings {
 }
 // -------------------------------------------------- SETTINGS --------------------------------------------------
 
+class Schedule {
+  public readonly blocks : ScheduleBlock[];
+  public readonly report : any;
+  constructor(blocks: ScheduleBlock[], report: any) {
+    this.blocks = blocks;
+    this.report = report;
+  }
+}
+
 class ScheduleAlgorithm {
 
   private readonly settings : ScheduleSettings;
@@ -218,7 +227,7 @@ class ScheduleAlgorithm {
     return true;
   }
 
-  public makeSchedule(tasks: TaskExternal[]) : ScheduleBlock[] {
+  public makeSchedule(tasks: TaskExternal[]) : Schedule {
     
     let runningTaskIdx = 0;
 
@@ -396,7 +405,12 @@ class ScheduleAlgorithm {
       taskIdx++;
     }
     blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "FIN","FIN", moment(dateCursor).add(timeCursor, "minutes"), 0, -1, null));
-    return blocks;
+    return new Schedule(blocks, {
+      items: [
+        {what: "Can I get everything done?"},
+        {value:true}
+      ]
+    });
   }
 
 }
@@ -549,9 +563,16 @@ tags do not include #someday
 
           // compute schedule.
           let scheduleAlgorithm : ScheduleAlgorithm = new ScheduleAlgorithm(settingsObj);
-          let blocks : ScheduleBlock[] = scheduleAlgorithm.makeSchedule(tempTasks);
+          
+          const schedule : Schedule = scheduleAlgorithm.makeSchedule(tempTasks);
+          const blocks = schedule.blocks;
 
           let scheduleOut = "";
+
+          // begin with rendering the report.
+          scheduleOut += `**Report** = \n`;
+          scheduleOut += `\`\`\`json\n${JSON.stringify(schedule.report, null, 2)}\n\`\`\`\n\n`;
+
   /* Example schedule:
   2023-02-05: 
   
@@ -787,6 +808,8 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
 */
 
 // ------------- POST MVP -------------
+
+// TODO: maybe add ability to make tasks dependent on each other.
 
 // TODO: hook in default schedule settings into plugin settings page.
 
