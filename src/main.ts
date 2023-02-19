@@ -238,13 +238,14 @@ class ScheduleAlgorithm {
     // TODO: We need to add to the tasks plugin another piece of metadata for estimated time to complete.
     // This will be part of our priv extension.
     let timeNow = moment();
-    let today = moment(timeNow.format("YYYY-MM-DD"));
+    const virtualToday = getLaterOfTwoDates(moment(timeNow.format("YYYY-MM-DD")), moment(this.settings.viewBegin));
+
     let alignUp = (from: number, alignment: number) => {
       return Math.ceil(from / alignment) * alignment;
     }
-    let timeCursor = alignUp(Math.max(this.settings.scheduleBegin, timeNow.diff(today, "minutes")), this.settings.blockStepSize);
+    let timeCursor = alignUp(Math.max(this.settings.scheduleBegin, timeNow.diff(virtualToday, "minutes")), this.settings.blockStepSize);
     let blocks: ScheduleBlock[] = [];
-    let dateCursor = moment(today);
+    let dateCursor = moment(virtualToday);
     let insertDateHeader = () => {
       blocks.push(new ScheduleBlock(ScheduleBlockType.DATE_HEADER, "", "",moment(dateCursor), 0, -1, null));
     }
@@ -324,7 +325,7 @@ class ScheduleAlgorithm {
         let task : TaskExternal = tasks[i];
         if (task.recurrenceRrule) {
           {
-            let beginDate = getLaterOfTwoDates(CREATE_MOMENT(task.recurrenceReferenceDate), CREATE_MOMENT(today));
+            let beginDate = getLaterOfTwoDates(CREATE_MOMENT(task.recurrenceReferenceDate), CREATE_MOMENT(virtualToday));
             if (beginDate) {
               taskRegistry.addTask(task); // ADD ORIGINAL TASK TO REGISTRY.
               tasks.splice(i, 1); // we want to remove this particular task from the array.
