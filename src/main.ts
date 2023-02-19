@@ -158,6 +158,7 @@ class ScheduleSettings {
   public readonly padding : number;
   public readonly scheduleAlgo : (tasks : TaskExternal[]) => void;
   public readonly descriptionFilter : (description: string) => string;
+  public readonly query : string;
 
   // TODO: is there any way to greatly simplify this sort of thing????? like come on man, this sort of code is MASSIVELY boilerplate esque.
   // I'm not a fan in any way at all.
@@ -172,7 +173,8 @@ class ScheduleSettings {
     defaultBlockSize,
     padding,
     scheduleAlgo,
-    descriptionFilter
+    descriptionFilter,
+    query
   } : {
     scheduleBegin : number,
     scheduleEnd : number,
@@ -184,7 +186,8 @@ class ScheduleSettings {
     defaultBlockSize : number,
     padding : number,
     scheduleAlgo : (tasks : TaskExternal[]) => void,
-    descriptionFilter : (description: string) => string
+    descriptionFilter : (description: string) => string,
+    query : string
   }) {
     this.scheduleBegin = scheduleBegin;
     this.scheduleEnd = scheduleEnd;
@@ -197,6 +200,7 @@ class ScheduleSettings {
     this.padding = padding;
     this.scheduleAlgo = scheduleAlgo;
     this.descriptionFilter = descriptionFilter;
+    this.query = query;
   }
 }
 // -------------------------------------------------- SETTINGS --------------------------------------------------
@@ -401,6 +405,8 @@ export class ScheduleWriter {
 
   private app: App;
 
+  private cachedQuery: string = "";
+
   constructor(app: App) {
     this.app = app;
   }
@@ -411,7 +417,7 @@ export class ScheduleWriter {
 
   // TODO: It would be preferred if our plugin could render to a custom ```timeblocking block.
   // as this would ensure data integrity of the rest of the markdown file.
-  async writeSchedule(mv : MarkdownView, tempTasks: TaskExternal[]) {
+  async writeSchedule(mv : MarkdownView, getTasks: (query:string)=>Promise<TaskExternal[]>) {
 
     const fileRef = mv.file;
     if (!fileRef) {
@@ -421,6 +427,8 @@ export class ScheduleWriter {
 
     // TODO: in the case that the user has updated some data in the view but autosave has 
     // not kicked-in, we need to force save to get our update schedule settings :)
+
+    let tempTasks = await getTasks(this.cachedQuery);
 
     // atomically read, process, and write file.
     this.app.vault.process(fileRef, (fileContent:string) => {
@@ -462,6 +470,13 @@ export class ScheduleWriter {
               blockStepSize: 5,
               defaultBlockSize: 30,
               padding: 15,
+              query:
+`not done 
+description includes TODO 
+path does not include TODO Template
+path does not include Weekly Journal Template
+tags do not include #someday
+`,
               descriptionFilter: (description) => {
                 const cruftRemoved = description.replace("[[TODO]](Noah):", "");
                 const tagsBettered = cruftRemoved.replace(/#([a-zA-Z0-9]+)/g, (match) => {
@@ -525,6 +540,12 @@ export class ScheduleWriter {
               settingsObj[key] = settingsObjDefault[key];
             } 
           }
+
+          // update cachedQuery.
+          if (settingsObj.query !== this.cachedQuery) {
+            console.warn('Obsidian-Time-Blocking: the query has changed. Using old query this time. Refresh to use new one.');
+          }
+          this.cachedQuery = settingsObj.query;
 
           // compute schedule.
           let scheduleAlgorithm : ScheduleAlgorithm = new ScheduleAlgorithm(settingsObj);
@@ -651,18 +672,14 @@ export function renderTimeblocking(app : App, leafView : MarkdownView | null) {
     return;
   }
 
-  this.app.plugins.plugins["obsidian-tasks-plugin"].oneHotResolveQueryToTasks(
-`not done 
-description includes TODO 
-path does not include TODO Template
-path does not include Weekly Journal Template
-tags do not include #someday
-`
-  ).then((tasks : TaskExternal[]) => {
-    console.log("Obsidian-Time-Blocking: ", tasks);
-    let tempTasks = Array.from(tasks);
-    
-    scheduleWriter.writeSchedule(leafView, tempTasks);
+  scheduleWriter.writeSchedule(leafView, (query:string) => {
+    return new Promise((resolve, reject) => {
+      this.app.plugins.plugins["obsidian-tasks-plugin"].oneHotResolveQueryToTasks(query).then((tasks : TaskExternal[]) => {
+        console.log("Obsidian-Time-Blocking: ", tasks);
+        let tempTasks = Array.from(tasks);
+        resolve(tempTasks);
+      });
+    });
   });
 }
 
