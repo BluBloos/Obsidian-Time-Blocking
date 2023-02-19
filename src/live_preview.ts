@@ -46,13 +46,15 @@ class LivePreviewExtension implements PluginValue {
         //this.observer.disconnect();
     }
 
-    private async replaceTask(task: TaskExternal) {
+    private async editTask(task: TaskExternal, editOp : (plugin : any, task : any) => Promise<void> ) {
         const app = taskRegistry.getApp();
         if (app) {
             const TasksPlugin = app.plugins.plugins["obsidian-tasks-plugin"];
             const TasksTask = TasksPlugin.taskFromTaskExternal(task);
-            const toggledTasks = TasksTask.toggle();
-            TasksPlugin.replaceTaskWithTasks(TasksTask, toggledTasks);
+
+            // TODO: Make tasks-plugin.replaceTaskWithTasks actually waitable. afaik it returns immediately
+            // currently.
+            await editOp(TasksPlugin, TasksTask);
 
             // NOTE: dirty hack, we're going to wait for like 1s here before re-render because apparently we cannot wait
             // on the replace task call ...
@@ -60,6 +62,24 @@ class LivePreviewExtension implements PluginValue {
                 renderTimeblocking(app);
             }, 1000);
         }
+    }
+
+    private async toggleTask(task: TaskExternal) {
+        this.editTask(task, async (plugin:any, task : any) => {
+            const toggledTasks = task.toggle();
+            plugin.replaceTaskWithTasks(task, toggledTasks);
+        });
+    }
+
+    private getTaskFromTarget(target:any) : TaskExternal {
+        // get line that was clicked.
+        const { state } = this.view;
+        const position = this.view.posAtDOM(target);
+        const line = state.doc.lineAt(position);
+        console.log("line", line);
+        const regex = new RegExp(`${TASK_SYMBOL}(\\d+)`, 'u'); // TODO:make more robust. what if task desc contains this?
+        const renderIdx = parseInt(line.text.match(regex)?.[1]??'-1');
+        return taskRegistry.getTaskFromRenderIdx(renderIdx);
     }
 
     private handleClickEvent(event: MouseEvent): boolean {
@@ -79,34 +99,28 @@ class LivePreviewExtension implements PluginValue {
             // get the parent.
             const parent = target.parentElement;
             if (parent && parent.classList.contains('cm-link')) {
-
                 console.log("Obsidian-Time-Blocking: Clicked on task complete button!");
-
-                // get line that was clicked.
-                const { state } = this.view;
-                const position = this.view.posAtDOM(target);
-                const line = state.doc.lineAt(position);
-                console.log("line", line);
-                const regex = new RegExp(`${TASK_SYMBOL}(\\d+)`, 'u');
-                const renderIdx = parseInt(line.text.match(regex)?.[1]??'-1');
-
                 // don't navigate the link.
                 event.preventDefault();
-
-                //const renderIdx = target.innerText.replace(TASK_SYMBOL, '');
-                const task = taskRegistry.getTaskFromRenderIdx(renderIdx);
+                let task = this.getTaskFromTarget(target);
                 if (task) {
-                    console.log('task from registry', task);
-                    this.replaceTask(task);
+                    this.toggleTask(task);
                 }
-
-                return true;
-                
+                return true;              
             }
         } else if (target.innerText.includes(TASK_EDIT_SYMBOL) && target.classList.contains('cm-underline')) {
             const parent = target.parentElement;
             if (parent && parent.classList.contains('cm-link')) {
                 console.log("Obsidian-Time-Blocking: Clicked on task edit button!");
+                // don't navigate the link.
+                event.preventDefault();
+                let task = this.getTaskFromTarget(target);
+                if (task) {
+                    this.editTask(task, (plugin:any, Task : any) : Promise<void> => {
+                        return plugin.editTaskWithModal(Task);
+                    });
+                }
+                return true;
             }
         }
 
