@@ -329,12 +329,20 @@ class ScheduleAlgorithm {
             if (beginDate) {
               taskRegistry.addTask(task); // ADD ORIGINAL TASK TO REGISTRY.
               tasks.splice(i, 1); // we want to remove this particular task from the array.
+              const begin = beginDate.toDate();
+              // viewEnd is the exlusive date. therefore we can use as is because we get back 00:00:00 and .between sees
+              // any task on the viewEnd date as not being in the range.
+              const end = CREATE_MOMENT(this.settings.viewEnd).toDate(); 
               let newTasks = task.recurrenceRrule.between(
-                beginDate.toDate(),
-                CREATE_MOMENT(this.settings.viewEnd).add(-1,'day').toDate(),
+                begin,
+                end,
                 true // inclusive
-              )
+              );
+              //console.log('begin',begin);
+              //console.log('end',end);
               for (let date of newTasks) {
+                //console.log('date', date);
+                //console.log('date get utc components',date.getUTCFullYear(),date.getUTCMonth(),date.getUTCDate());
                 let newTask = new TaskExternal({...task});
                 // NOTE: THE BOTTOM LINE: Returned "UTC" dates are always meant to be interpreted as dates in your local timezone.
                 // This may mean you have to do additional conversion to get the "correct" local time with offset applied.
