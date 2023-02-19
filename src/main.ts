@@ -45,6 +45,24 @@ const ESTIMATED_TIME_TO_COMPLETE_SYMBOL: string = "⏱️";
 const RECURRENCE_RULE_SYMBOL: string = "🔁";
 const START_TASK_TIMER_SYMBOL: string = "🏃‍♂️";
 const BACKLINK_SYMBOL: string = "🔗";
+const PRIORITY_HIGH_SYMBOL: string = "🔥";
+const PRIORITY_MEDIUM_SYMBOL: string = "🔼";
+const PRIORITY_LOW_SYMBOL: string = "🔽";
+const PRIORITY_NONE_SYMBOL: string = "";
+
+function priorityToSymbol(priority: number) {
+  switch (priority) {
+    case 1:
+      return PRIORITY_HIGH_SYMBOL;
+    case 2:
+      return PRIORITY_MEDIUM_SYMBOL;
+    case 3:
+      return PRIORITY_NONE_SYMBOL;
+    case 4:
+    default:
+      return PRIORITY_LOW_SYMBOL;
+  }
+}
 
 import {TaskUID, TaskExternal} from './types';
 
@@ -234,8 +252,9 @@ class ScheduleAlgorithm {
       let renderBacklink = ` ${BACKLINK_SYMBOL} [${shortPath}](${task.uid.path.replace(/ /g, (m)=>'%20')})`;
       let renderBacklinkBare = ` ${BACKLINK_SYMBOL} ${shortPath}`;
       let renderRecurrence = (task.recurrenceRrule) ? ` ${RECURRENCE_RULE_SYMBOL} ${task.recurrenceRrule.toText()}` : "";
-      let taskText = `${minutesToString(duration)} - ${this.settings.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklink}`;
-      let taskTextBare = `${minutesToString(duration)} - ${this.settings.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklinkBare}`;
+      let renderPriority = (task.priority !== 3) ? ` ${priorityToSymbol(task.priority)}` : "";
+      let taskText = `${minutesToString(duration)} - ${this.settings.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderPriority}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklink}`;
+      let taskTextBare = `${minutesToString(duration)} - ${this.settings.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderPriority}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklinkBare}`;
       blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, taskText, taskTextBare,
         moment(dateCursor).add(timeCursor, "minutes"), duration, runningTaskIdx++, task.uid));
     }
