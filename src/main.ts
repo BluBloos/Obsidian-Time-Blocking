@@ -135,8 +135,7 @@ class ScheduleAlgorithm {
   private readonly scheduleBegin = NOON + MIN_PER_HOUR * 5;
   private readonly scheduleEnd   = NOON + MIN_PER_HOUR * 9;
   private readonly viewBegin = "2023-02-04";  // begin is inclusive
-  private readonly viewEnd =   "2023-12-30";  //< the end is exclusive, so for this specific
-                                              //  example it is 2023-02-10 EOD.
+  private readonly viewEnd =   "2023-12-30";  //< the end is exclusive (date granularity)
 
   private readonly maxBlockSize = 90;  // the unit for these three is always minutes.
   private readonly minBlockSize = 15;
@@ -400,7 +399,7 @@ export class ScheduleWriter {
 
   // TODO: It would be preferred if our plugin could render to a custom ```timeblocking block.
   // as this would ensure data integrity of the rest of the markdown file.
-  async writeSchedule(mv : MarkdownView, blocks: ScheduleBlock[]) {
+  async writeSchedule(mv : MarkdownView, scheduleAlgorithm : ScheduleAlgorithm, tempTasks: TaskExternal[]) {
 
     const fileRef = mv.file;
     if (!fileRef) {
@@ -429,6 +428,11 @@ export class ScheduleWriter {
         const textAfter  = textSections[1].slice(oneAfterPreambleEof).split(EOF); // If indexStart >= str.length, an empty string is returned.
         if (textAfter.length > 1) {
           const textAfterPostambleEof = textAfter[1];
+
+
+          // compute schedule.
+          let blocks : ScheduleBlock[] = scheduleAlgorithm.makeSchedule(tempTasks);
+
           let scheduleOut = "";
   /* Example schedule:
   2023-02-05: 
@@ -561,8 +565,9 @@ tags do not include #someday
   ).then((tasks : TaskExternal[]) => {
     console.log("Obsidian-Time-Blocking: ", tasks);
     let tempTasks = Array.from(tasks);
-    let blocks : ScheduleBlock[] = scheduleAlgorithm.makeSchedule(tempTasks);
-    scheduleWriter.writeSchedule(leafView, blocks);
+    
+    //let blocks : ScheduleBlock[] = scheduleAlgorithm.makeSchedule(tempTasks);
+    scheduleWriter.writeSchedule(leafView, scheduleAlgorithm, tempTasks);
   });
 }
 
@@ -672,6 +677,8 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
 */
 
 // ------------- POST MVP -------------
+
+// TODO: address the speed issues introduced frrom code mirror crap.
 
 // TODO: hook secondary start timer option - https://github.com/BluBloos/python-timer
 
