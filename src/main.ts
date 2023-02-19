@@ -230,6 +230,7 @@ class ScheduleAlgorithm {
   public makeSchedule(tasks: TaskExternal[]) : Schedule {
     
     let runningTaskIdx = 0;
+    let canGetEverythingDone = true;
 
     // ensure tasks are reset in registry.
     taskRegistry.reset();
@@ -256,20 +257,28 @@ class ScheduleAlgorithm {
     }
     // also render task, I suppose.
     let insertTask = (task : TaskExternal, duration : number) => {
-      let renderDueDate = (task.dueDate) ? ` ${DUE_DATE_SYMBOL} ${task.dueDate.format("YYYY-MM-DD")}` : "";
-      let renderScheduledDate = (task.scheduledDate) ? ` ${SCHEDULED_DATE_SYMBOL} ${task.scheduledDate.format("YYYY-MM-DD")}` : "";
-      let renderStartDate = (task.startDate) ? ` ${SCHEDULED_START_DATE_SYMBOL} ${task.startDate.format("YYYY-MM-DD")}` : "";
-      let renderEstimatedTimeToComplete =
+      const renderDueDate = (task.dueDate) ? ` ${DUE_DATE_SYMBOL} ${task.dueDate.format("YYYY-MM-DD")}` : "";
+      const renderScheduledDate = (task.scheduledDate) ? ` ${SCHEDULED_DATE_SYMBOL} ${task.scheduledDate.format("YYYY-MM-DD")}` : "";
+      const renderStartDate = (task.startDate) ? ` ${SCHEDULED_START_DATE_SYMBOL} ${task.startDate.format("YYYY-MM-DD")}` : "";
+      const renderEstimatedTimeToComplete =
         (task.estimatedTimeToComplete) ? ` ${ESTIMATED_TIME_TO_COMPLETE_SYMBOL} ${minutesToString(task.estimatedTimeToComplete)}` : "";
-      let shortPath = task.uid.path.split("/").slice(-1)[0];
-      let renderBacklink = ` ${BACKLINK_SYMBOL} [${shortPath}](${task.uid.path.replace(/ /g, (m)=>'%20')})`;
-      let renderBacklinkBare = ` ${BACKLINK_SYMBOL} ${shortPath}`;
-      let renderRecurrence = (task.recurrenceRrule) ? ` ${RECURRENCE_RULE_SYMBOL} ${task.recurrenceRrule.toText()}` : "";
-      let renderPriority = (task.priority !== 3) ? ` ${priorityToSymbol(task.priority)}` : "";
-      let taskText = `${minutesToString(duration)} - ${this.settings.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderPriority}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklink}`;
-      let taskTextBare = `${minutesToString(duration)} - ${this.settings.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderPriority}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklinkBare}`;
-      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, taskText, taskTextBare,
-        moment(dateCursor).add(timeCursor, "minutes"), duration, runningTaskIdx++, task.uid));
+      const shortPath = task.uid.path.split("/").slice(-1)[0];
+      const renderBacklink = ` ${BACKLINK_SYMBOL} [${shortPath}](${task.uid.path.replace(/ /g, (m)=>'%20')})`;
+      const renderBacklinkBare = ` ${BACKLINK_SYMBOL} ${shortPath}`;
+      const renderRecurrence = (task.recurrenceRrule) ? ` ${RECURRENCE_RULE_SYMBOL} ${task.recurrenceRrule.toText()}` : "";
+      const renderPriority = (task.priority !== 3) ? ` ${priorityToSymbol(task.priority)}` : "";
+      const taskText = `${minutesToString(duration)} - ${this.settings.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderPriority}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklink}`;
+      const taskTextBare = `${minutesToString(duration)} - ${this.settings.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderPriority}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklinkBare}`;
+      const newBlock = new ScheduleBlock(ScheduleBlockType.TASK, taskText, taskTextBare,
+        moment(dateCursor).add(timeCursor, "minutes"), duration, runningTaskIdx++, task.uid);
+      blocks.push(newBlock);
+      // check if task extent of task goes past EOD for due date.
+      if (task.dueDate) {
+        const newBlockEnd = moment(newBlock.startTime).add(newBlock.duration, 'minutes');
+        if (newBlockEnd.diff(moment(moment(task.dueDate.format('YYYY-MM-DD')).add(1,'d')), "minutes") > 0) {
+          canGetEverythingDone = false;
+        }
+      } 
     }
     let insertBreak = () => {
       blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", "BREAK",moment(dateCursor).add(timeCursor, "minutes"), this.settings.padding, -1, null));
@@ -408,7 +417,7 @@ class ScheduleAlgorithm {
     return new Schedule(blocks, {
       items: [
         {what: "Can I get everything done?"},
-        {value:true}
+        {value: canGetEverythingDone}
       ]
     });
   }
