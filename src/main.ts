@@ -126,77 +126,70 @@ function VISIBLE_COUNT(str:string) {
     return str.length;
 }
 
-const MIN_PER_HOUR = 60;
-const NOON = MIN_PER_HOUR * 12;
+// -------------------------------------------------- SETTINGS --------------------------------------------------
+class ScheduleSettings {
+  public readonly scheduleBegin : number;// = NOON + MIN_PER_HOUR * 5;
+  public readonly scheduleEnd : number;//   = NOON + MIN_PER_HOUR * 9;
+  public readonly viewBegin:string;// = "2023-02-04";  // begin is inclusive
+  public readonly viewEnd:string;// =   "2023-12-30";  //< the end is exclusive (date granularity)
+  public readonly maxBlockSize : number;// = 90;  // the unit for these three is always minutes.
+  public readonly minBlockSize : number;// = 15;
+  public readonly blockStepSize : number;// = 5;  //< I always want blocks to be divisible by 5 mins. this is
+                                      //  also an implicit alignment for task begin.
+  public readonly defaultBlockSize : number;//= 30;
+  public readonly padding : number;
+  public readonly scheduleAlgo : (tasks : TaskExternal[]) => void;
+  public readonly descriptionFilter : (description: string) => string;
+
+  // TODO: is there any way to greatly simplify this sort of thing????? like come on man, this sort of code is MASSIVELY boilerplate esque.
+  // I'm not a fan in any way at all.
+  constructor({
+    scheduleBegin,
+    scheduleEnd,
+    viewBegin,
+    viewEnd,
+    maxBlockSize,
+    minBlockSize,
+    blockStepSize,
+    defaultBlockSize,
+    padding,
+    scheduleAlgo,
+    descriptionFilter
+  } : {
+    scheduleBegin : number,
+    scheduleEnd : number,
+    viewBegin:string,
+    viewEnd:string,
+    maxBlockSize : number,
+    minBlockSize : number,
+    blockStepSize : number,
+    defaultBlockSize : number,
+    padding : number,
+    scheduleAlgo : (tasks : TaskExternal[]) => void,
+    descriptionFilter : (description: string) => string
+  }) {
+    this.scheduleBegin = scheduleBegin;
+    this.scheduleEnd = scheduleEnd;
+    this.viewBegin = viewBegin;
+    this.viewEnd = viewEnd;
+    this.maxBlockSize = maxBlockSize;
+    this.minBlockSize = minBlockSize;
+    this.blockStepSize = blockStepSize;
+    this.defaultBlockSize = defaultBlockSize;
+    this.padding = padding;
+    this.scheduleAlgo = scheduleAlgo;
+    this.descriptionFilter = descriptionFilter;
+  }
+}
+// -------------------------------------------------- SETTINGS --------------------------------------------------
+
 class ScheduleAlgorithm {
 
-// -------------------------------------------------- SETTINGS --------------------------------------------------
+  private readonly settings : ScheduleSettings;
 
-  private readonly scheduleBegin = NOON + MIN_PER_HOUR * 5;
-  private readonly scheduleEnd   = NOON + MIN_PER_HOUR * 9;
-  private readonly viewBegin = "2023-02-04";  // begin is inclusive
-  private readonly viewEnd =   "2023-12-30";  //< the end is exclusive (date granularity)
-
-  private readonly maxBlockSize = 90;  // the unit for these three is always minutes.
-  private readonly minBlockSize = 15;
-  private readonly blockStepSize = 5;  //< I always want blocks to be divisible by 5 mins. this is
-                                       //  also an implicit alignment for task begin.
-  private readonly defaultBlockSize = 30;
-
-  private readonly padding = 15;
-
-  private readonly scheduleAlgo = (tasks : TaskExternal[]) => {
-    const priorityAlgo = (task: TaskExternal) => {
-      if (task.dueDate) {
-        const timeUntilDue = task.dueDate.diff(moment(), "hours");
-        if (timeUntilDue <= 24) return 1;
-        if (timeUntilDue <= 24 * 14) return 2; // my personal rule is if within next 2 weeks, it's effectively P1, but not quite.
-      }
-      if (task.tags.includes("#P1")) return 1;
-      if (task.tags.includes("#P2")) return 3;
-      if (task.tags.includes("#P3")) return 4;
-      return 5;
-    };
-    tasks.sort((a, b) => {
-      // > 0 means sort a after b.
-      // < 0 means sort a before b.
-      // 0 means leave a and b unchanged.
-      return priorityAlgo(a) - priorityAlgo(b);
-    });
-    // pass 2.
-    let filteredTasks = tasks.filter((task) => {
-      return !!getTaskStartDate(task);
-    });
-    filteredTasks.sort( (a, b) => {
-      let aEarliestStart = getTaskStartDate(a);
-      let bEarliestStart = getTaskStartDate(b);
-      let result :number = 0;
-      if (aEarliestStart && bEarliestStart) {
-        result = aEarliestStart.isAfter(bEarliestStart, 'D') ? 1 : (aEarliestStart.isSame(bEarliestStart, 'D') ? 0 : -1);
-      }
-      //console.log("compare func", aEarliestStart, bEarliestStart, result);
-      return result;
-    });
-    // merge filteredTasks back in.
-    for (let i = 0, Idx = 0; Idx < tasks.length; Idx++) {
-      //tasks[i] = filteredTasks[i];
-      if (filteredTasks.includes(tasks[Idx])) {
-        tasks[Idx] = filteredTasks[i++];
-      }
-    }
+  constructor(settings : ScheduleSettings) {
+    this.settings = settings;
   }
-
-  private readonly descriptionFilter = (description: string) => {
-    const cruftRemoved = description.replace("[[TODO]](Noah):", "");
-    const tagsBettered = cruftRemoved.replace(/#([a-zA-Z0-9]+)/g, (match : string) => {
-      return `**${match}**`;
-    });
-    return tagsBettered.trim();
-  };
-
-
-// -------------------------------------------------- SETTINGS --------------------------------------------------
-
 
   public isEqual(other: ScheduleAlgorithm) {
     // TODO:
@@ -217,7 +210,7 @@ class ScheduleAlgorithm {
     let alignUp = (from: number, alignment: number) => {
       return Math.ceil(from / alignment) * alignment;
     }
-    let timeCursor = alignUp(Math.max(this.scheduleBegin, timeNow.diff(today, "minutes")), this.blockStepSize);
+    let timeCursor = alignUp(Math.max(this.settings.scheduleBegin, timeNow.diff(today, "minutes")), this.settings.blockStepSize);
     let blocks: ScheduleBlock[] = [];
     let dateCursor = moment(today);
     let insertDateHeader = () => {
@@ -241,14 +234,14 @@ class ScheduleAlgorithm {
       let renderBacklink = ` ${BACKLINK_SYMBOL} [${shortPath}](${task.uid.path.replace(/ /g, (m)=>'%20')})`;
       let renderBacklinkBare = ` ${BACKLINK_SYMBOL} ${shortPath}`;
       let renderRecurrence = (task.recurrenceRrule) ? ` ${RECURRENCE_RULE_SYMBOL} ${task.recurrenceRrule.toText()}` : "";
-      let taskText = `${minutesToString(duration)} - ${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklink}`;
-      let taskTextBare = `${minutesToString(duration)} - ${this.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklinkBare}`;
+      let taskText = `${minutesToString(duration)} - ${this.settings.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklink}`;
+      let taskTextBare = `${minutesToString(duration)} - ${this.settings.descriptionFilter(task.description)}${renderDueDate}${renderScheduledDate}${renderStartDate}${renderEstimatedTimeToComplete}${renderRecurrence}${renderBacklinkBare}`;
       blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, taskText, taskTextBare,
         moment(dateCursor).add(timeCursor, "minutes"), duration, runningTaskIdx++, task.uid));
     }
     let insertBreak = () => {
-      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", "BREAK",moment(dateCursor).add(timeCursor, "minutes"), this.padding, -1, null));
-      timeCursor += this.padding;
+      blocks.push(new ScheduleBlock(ScheduleBlockType.TASK, "*BREAK*", "BREAK",moment(dateCursor).add(timeCursor, "minutes"), this.settings.padding, -1, null));
+      timeCursor += this.settings.padding;
       checkBoundary();
     }
     /// @returns true if we crossed the boundary.
@@ -257,19 +250,19 @@ class ScheduleAlgorithm {
       let result : Boolean = false;
       // TODO: currently right now it is possible for us to go over scheduleBound, or "lose" some of a task across the 24 Hour boundary.
       // check if the timeCursor has crossed the boundary of a day.
-      if (timeCursor >= this.scheduleEnd) {
-        let datesToAdd = 1 + Math.floor( (timeCursor - this.scheduleEnd) / (24 * 60) );
+      if (timeCursor >= this.settings.scheduleEnd) {
+        let datesToAdd = 1 + Math.floor( (timeCursor - this.settings.scheduleEnd) / (24 * 60) );
         dateCursor.add(datesToAdd, "days");
-        timeCursor = this.scheduleBegin;
+        timeCursor = this.settings.scheduleBegin;
         result = true;
       }
 
       // viewEnd is always at the beginning of a day at the time of writing this comment.
       // so we could put this within the above if.
       // but incase viewEnd ever changes, best to keep this here.
-      if (moment(dateCursor).add(timeCursor, "minutes").isAfter(moment(this.viewEnd))) {
+      if (moment(dateCursor).add(timeCursor, "minutes").isAfter(moment(this.settings.viewEnd))) {
         // overwrite last added task as its extent exceeds the viewEnd.
-        blocks[blocks.length-1]=(new ScheduleBlock(ScheduleBlockType.EXIT, "", "",moment(this.viewEnd), 0, -1, null));
+        blocks[blocks.length-1]=(new ScheduleBlock(ScheduleBlockType.EXIT, "", "",moment(this.settings.viewEnd), 0, -1, null));
         return true;
       }
 
@@ -296,7 +289,7 @@ class ScheduleAlgorithm {
               tasks.splice(i, 1); // we want to remove this particular task from the array.
               let newTasks = task.recurrenceRrule.between(
                 beginDate.toDate(),
-                CREATE_MOMENT(this.viewEnd).add(-1,'day').toDate(),
+                CREATE_MOMENT(this.settings.viewEnd).add(-1,'day').toDate(),
                 true // inclusive
               )
               for (let date of newTasks) {
@@ -321,7 +314,7 @@ class ScheduleAlgorithm {
       }
     }
     // USER GETS TO DO A CUSTOM SORTING OF TASKS.
-    this.scheduleAlgo(tasks); // WORKS IN PLACE.
+    this.settings.scheduleAlgo(tasks); // WORKS IN PLACE.
     console.log("tasks pre-blocking", tasks);
     // USER GETS TO DO A CUSTOM SORTING OF TASKS.
     let taskStack : TaskExternal[] = [];
@@ -358,19 +351,19 @@ class ScheduleAlgorithm {
       // NOTE: we must call moment on a moment to clone it.
       if (task.estimatedTimeToComplete) {
         let timeLeft = task.estimatedTimeToComplete;
-        let times = Math.ceil(task.estimatedTimeToComplete / this.maxBlockSize);
+        let times = Math.ceil(task.estimatedTimeToComplete / this.settings.maxBlockSize);
         while (times > 0) {
-          const taskDuration = alignUp(Math.max(Math.min(this.maxBlockSize, timeLeft), this.minBlockSize), this.blockStepSize);
+          const taskDuration = alignUp(Math.max(Math.min(this.settings.maxBlockSize, timeLeft), this.settings.minBlockSize), this.settings.blockStepSize);
           insertTask(task, taskDuration);
           timeCursor += taskDuration;
           if (!checkBoundary()) {
             insertBreak();
           }
           times--;
-          timeLeft -= this.maxBlockSize;
+          timeLeft -= this.settings.maxBlockSize;
         }
       } else {
-        const taskDuration = this.defaultBlockSize
+        const taskDuration = this.settings.defaultBlockSize
         insertTask(task, taskDuration);
         timeCursor += taskDuration;
         if (!checkBoundary()) {
@@ -399,13 +392,16 @@ export class ScheduleWriter {
 
   // TODO: It would be preferred if our plugin could render to a custom ```timeblocking block.
   // as this would ensure data integrity of the rest of the markdown file.
-  async writeSchedule(mv : MarkdownView, scheduleAlgorithm : ScheduleAlgorithm, tempTasks: TaskExternal[]) {
+  async writeSchedule(mv : MarkdownView, tempTasks: TaskExternal[]) {
 
     const fileRef = mv.file;
     if (!fileRef) {
       console.error("Obsidian-Time-Blocking: fileRef for MarkdownView is undefined|null. Returning early.");
       return;
     }
+
+    // TODO: in the case that the user has updated some data in the view but autosave has 
+    // not kicked-in, we need to force save to get our update schedule settings :)
 
     // atomically read, process, and write file.
     this.app.vault.process(fileRef, (fileContent:string) => {
@@ -429,8 +425,90 @@ export class ScheduleWriter {
         if (textAfter.length > 1) {
           const textAfterPostambleEof = textAfter[1];
 
+          // get the schedule settings from postamble bit.
+          const settingsRegex = /^\s*```javascript([\s\S]*)```/u; // u is for unicode.
+          const settingsMatch = textAfterPostambleEof.match(settingsRegex);
+          const generateSettingsFuncString = settingsMatch ? settingsMatch[1] : "";
+          
+          const generateSettingsFunDefault = (moment: any, getTaskStartDate: any) => {
+            const MIN_PER_HOUR = 60;
+            const NOON = MIN_PER_HOUR * 12;
+            return {
+              scheduleBegin: NOON + MIN_PER_HOUR * 5,
+              scheduleEnd: NOON + MIN_PER_HOUR * 9,
+              viewBegin: "2023-02-04",
+              viewEnd: "2023-12-30",
+              maxBlockSize: 90,
+              minBlockSize: 15,
+              blockStepSize: 5,
+              defaultBlockSize: 30,
+              padding: 15,
+              descriptionFilter: (description) => {
+                const cruftRemoved = description.replace("[[TODO]](Noah):", "");
+                const tagsBettered = cruftRemoved.replace(/#([a-zA-Z0-9]+)/g, (match) => {
+                  return `**${match}**`;
+                });
+                return tagsBettered.trim();
+              },
+              scheduleAlgo: (tasks) => {
+                const priorityAlgo = (task) => {
+                  if (task.dueDate) {
+                    const timeUntilDue = task.dueDate.diff(moment(), "hours");
+                    if (timeUntilDue <= 24) return 1;
+                    if (timeUntilDue <= 24 * 14) return 2; // my personal rule is if within next 2 weeks, it's effectively P1, but not quite.
+                  }
+                  if (task.tags.includes("#P1")) return 1;
+                  if (task.tags.includes("#P2")) return 3;
+                  if (task.tags.includes("#P3")) return 4;
+                  return 5;
+                };
+                tasks.sort((a, b) => {
+                  // > 0 means sort a after b.
+                  // < 0 means sort a before b.
+                  // 0 means leave a and b unchanged
+                  return priorityAlgo(a) - priorityAlgo(b);
+                });
+                // pass 2.
+                let filteredTasks = tasks.filter((task) => {
+                  return !!getTaskStartDate(task);
+                });
+                filteredTasks.sort( (a, b) => {
+                  let aEarliestStart = getTaskStartDate(a);
+                  let bEarliestStart = getTaskStartDate(b);
+                  let result = 0;
+                  if (aEarliestStart && bEarliestStart) {
+                    result = aEarliestStart.isAfter(bEarliestStart, 'D') ? 1 :
+                    (aEarliestStart.isSame(bEarliestStart, 'D') ? 0 : -1);
+                  }
+                  return result;
+                });
+                // merge filteredTasks back in.
+                for (let i = 0, Idx = 0; Idx < tasks.length; Idx++) {
+                  if (filteredTasks.includes(tasks[Idx])) {
+                    tasks[Idx] = filteredTasks[i++];
+                  }
+                }
+              }
+            };
+          }
+          
+          const generateSettingsFun = generateSettingsFuncString ? new Function('moment', 'getTaskStartDate', generateSettingsFuncString) :
+            generateSettingsFunDefault;
+          const settingsObj : ScheduleSettings = generateSettingsFun(moment, getTaskStartDate);
+          const settingsObjDefault : ScheduleSettings = generateSettingsFunDefault(moment, getTaskStartDate);
+
+          // for those settings that are missing in settingsObj, fill in the gaps using the default settings obj.
+          // TODO: can we remove these ignores?
+          for (let key of Object.keys(settingsObjDefault)) {
+            // @ts-ignore
+            if (settingsObj[key] === undefined) {
+              // @ts-ignore
+              settingsObj[key] = settingsObjDefault[key];
+            } 
+          }
 
           // compute schedule.
+          let scheduleAlgorithm : ScheduleAlgorithm = new ScheduleAlgorithm(settingsObj);
           let blocks : ScheduleBlock[] = scheduleAlgorithm.makeSchedule(tempTasks);
 
           let scheduleOut = "";
@@ -542,7 +620,6 @@ export class ScheduleWriter {
 
 export function renderTimeblocking(app : App, leafView : MarkdownView | null) {
   const plugin = app.plugins.plugins["obsidian-time-blocking"];
-  const scheduleAlgorithm = plugin.scheduleAlgorithm;
   const scheduleWriter = plugin.scheduleWriter;
 
   // maybe need to find leafView
@@ -566,8 +643,7 @@ tags do not include #someday
     console.log("Obsidian-Time-Blocking: ", tasks);
     let tempTasks = Array.from(tasks);
     
-    //let blocks : ScheduleBlock[] = scheduleAlgorithm.makeSchedule(tempTasks);
-    scheduleWriter.writeSchedule(leafView, scheduleAlgorithm, tempTasks);
+    scheduleWriter.writeSchedule(leafView, tempTasks);
   });
 }
 
@@ -577,7 +653,6 @@ export default class ObsidianTimeBlocking extends Plugin {
   
   // TODO: make not public. bad design.
   public scheduleWriter: ScheduleWriter;
-  public scheduleAlgorithm: ScheduleAlgorithm;
 
   async unload(): Promise<void> {
     this.app.workspace.off("active-leaf-change", (leaf: WorkspaceLeaf) => {});
@@ -587,7 +662,6 @@ export default class ObsidianTimeBlocking extends Plugin {
     console.log("loading Obsidian-Time-Blocking plugin...");
 
     this.scheduleWriter = new ScheduleWriter(this.app);
-    this.scheduleAlgorithm = new ScheduleAlgorithm();
 
     await this.loadSettings();
 
@@ -677,6 +751,8 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
 */
 
 // ------------- POST MVP -------------
+
+// TODO: hook in default schedule settings into plugin settings page.
 
 // TODO: address the speed issues introduced frrom code mirror crap.
 
