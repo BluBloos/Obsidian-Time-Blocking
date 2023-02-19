@@ -347,7 +347,8 @@ class ScheduleAlgorithm {
                 // NOTE: THE BOTTOM LINE: Returned "UTC" dates are always meant to be interpreted as dates in your local timezone.
                 // This may mean you have to do additional conversion to get the "correct" local time with offset applied.
                 // ^ direct from the RRULE lib docs. Hence the line below:
-                newTask.scheduledDate = moment(`${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`);
+                // NOTE: also that .getUTCMonth is a zero-based value.
+                newTask.scheduledDate = moment(`${date.getUTCFullYear()}-${date.getUTCMonth()+1}-${date.getUTCDate()}`);
                 tasks.push(newTask); // OK, because everything will get re-order right after.
               }
             } else {
