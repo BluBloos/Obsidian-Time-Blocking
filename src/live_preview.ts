@@ -11,6 +11,9 @@ export const newLivePreviewExtension = () => {
 };
 
 export const TASK_SYMBOL = 'X';
+export const TASK_EDIT_SYMBOL = 'E';
+
+// TODO: seems there are some things we could do like when update decorations basically add a bunch of event listenters :)
 
 class LivePreviewExtension implements PluginValue {
     private readonly view: EditorView;
@@ -77,7 +80,7 @@ class LivePreviewExtension implements PluginValue {
             const parent = target.parentElement;
             if (parent && parent.classList.contains('cm-link')) {
 
-                console.log("the button has BEEN clicked");
+                console.log("Obsidian-Time-Blocking: Clicked on task complete button!");
 
                 // get line that was clicked.
                 const { state } = this.view;
@@ -99,6 +102,11 @@ class LivePreviewExtension implements PluginValue {
 
                 return true;
                 
+            }
+        } else if (target.innerText.includes(TASK_EDIT_SYMBOL) && target.classList.contains('cm-underline')) {
+            const parent = target.parentElement;
+            if (parent && parent.classList.contains('cm-link')) {
+                console.log("Obsidian-Time-Blocking: Clicked on task edit button!");
             }
         }
 

@@ -6,7 +6,7 @@ import { newLivePreviewExtension } from './live_preview';
 
 import TaskRegistry from './TaskRegistry';
 
-import { TASK_SYMBOL } from './live_preview';
+import { TASK_SYMBOL, TASK_EDIT_SYMBOL } from './live_preview';
 
 // create the one true taskRegistry :D.
 const taskRegistry = TaskRegistry.getInstance();
@@ -452,18 +452,20 @@ export class ScheduleWriter {
             let shouldExit = false;
             switch(block.type) {
               case ScheduleBlockType.TASK:
-                const maxTaskChars = 67;
+                const maxTaskChars = 60;
+                const editBttn = block.taskUID ? `[${TASK_EDIT_SYMBOL}](.) | ` : `  | `; // Will be borrow renderIdx from complete bttn.
+                const editBttnBare = block.taskUID ? `${TASK_EDIT_SYMBOL} | ` : `  | `;
                 const completeBttn = block.taskUID ? `[${TASK_SYMBOL}${block.renderIdx}](.) | ` : `  | `;
                 const completeBttnBare = block.taskUID ? `${TASK_SYMBOL} | ` : `  | `;
                 const timer = (block.duration>0)?
                   `-> [${START_TASK_TIMER_SYMBOL}](https://www.google.com/search?q=timer+${block.duration}+minutes)`: "";
                 const timerBare = (block.duration>0)?
                   `-> ${START_TASK_TIMER_SYMBOL}`: "";
-                const renderLineBeginBare = `${block.startTime.format("HH:mm")} | ${completeBttnBare}`;
-                const renderLineBegin = `*${block.startTime.format("HH:mm")}* | ${completeBttn}`;
+                const renderLineBeginBare = `${block.startTime.format("HH:mm")} | ${completeBttnBare}${editBttnBare}}`;
+                const renderLineBegin = `*${block.startTime.format("HH:mm")}* | ${completeBttn}${editBttn}`;
                 const indentLen = VISIBLE_COUNT(renderLineBeginBare);
-                let renderLineTask = `${renderLineBegin}${block.text} ${timer}`;
-                let renderLineTaskBare = `${renderLineBeginBare}${block.textBare} ${timerBare}`;
+                let renderLineTask = `${block.text} ${timer}`;
+                let renderLineTaskBare = `${block.textBare} ${timerBare}`;
                 // reflow toWriteToSchedule by maxTaskChars and indentLen.
                 //console.log('renderLineTask', renderLineTask);
                 //console.log('renderLineTaskBare', renderLineTaskBare);
@@ -473,9 +475,9 @@ export class ScheduleWriter {
                     let line = "";
                     let lineCount = 0;
                     let words = renderLineTask.split(" ");
-                    console.log('words', words);
+                    //console.log('words', words);
                     let wordsBare = renderLineTaskBare.split(" ");
-                    console.log('wordsBare', wordsBare);
+                    //console.log('wordsBare', wordsBare);
                     for (let j = 0; j < words.length && j < wordsBare.length; j++) {
                       if (lineCount + (VISIBLE_COUNT(wordsBare[j]) + 1) > maxTaskChars) {
                         reflowed += line + "\n";
@@ -488,10 +490,10 @@ export class ScheduleWriter {
                     if (VISIBLE_COUNT(line) > 0) {
                       reflowed += line;
                     }
-                    renderLineTask = reflowed + "\n"; // ones that wrap get extra newlines.
+                    renderLineTask = reflowed;
                   }
                 }
-                scheduleOut += renderLineTask + "\n";
+                scheduleOut += renderLineBegin + renderLineTask + "\n\n";
                 if (block.renderIdx >= 0) {
                   taskRegistry.addRenderIdxMapping(block.renderIdx, block.taskUID);
                 }
