@@ -325,29 +325,30 @@ class ScheduleAlgorithm {
         let task : TaskExternal = tasks[i];
         if (task.recurrenceRrule) {
           {
-            let beginDate = getLaterOfTwoDates(CREATE_MOMENT(task.recurrenceReferenceDate), CREATE_MOMENT(virtualToday));
+            // NOTE: the rrule lib is really odd. we provide values in "UTC" and we get back values in "UTC".
+            // aka offset=0. HOWEVER, these dates are not _actually_ in UTC. They are in the local timezone
+            // and should be interpreted as such...
+            // so if you see sillyness going on below, that is why.
+            const recurRefDate = task.recurrenceReferenceDate ? moment.utc(task.recurrenceReferenceDate.format('YYYY-MM-DD')):null;
+            let beginDate = getLaterOfTwoDates(
+              recurRefDate, moment.utc(virtualToday.format('YYYY-MM-DD')));
             if (beginDate) {
               taskRegistry.addTask(task); // ADD ORIGINAL TASK TO REGISTRY.
               tasks.splice(i, 1); // we want to remove this particular task from the array.
               const begin = beginDate.toDate();
-              // viewEnd is the exlusive date. therefore we can use as is because we get back 00:00:00 and .between sees
-              // any task on the viewEnd date as not being in the range.
-              const end = CREATE_MOMENT(this.settings.viewEnd).toDate(); 
+              // viewEnd is the exlusive date so subtract 1 minute to make it so that tasks cannot be schedule om
+              // the viewEnd date.
+              const end = moment.utc(this.settings.viewEnd).add(-1,'minutes').toDate(); 
+              //console.log('begin',begin.toISOString());
+              //console.log('end',end.toISOString());
               let newTasks = task.recurrenceRrule.between(
                 begin,
                 end,
                 true // inclusive
-              );
-              //console.log('begin',begin);
-              //console.log('end',end);
+              ); 
               for (let date of newTasks) {
-                //console.log('date', date);
-                //console.log('date get utc components',date.getUTCFullYear(),date.getUTCMonth(),date.getUTCDate());
                 let newTask = new TaskExternal({...task});
-                // NOTE: THE BOTTOM LINE: Returned "UTC" dates are always meant to be interpreted as dates in your local timezone.
-                // This may mean you have to do additional conversion to get the "correct" local time with offset applied.
-                // ^ direct from the RRULE lib docs. Hence the line below:
-                // NOTE: also that .getUTCMonth is a zero-based value.
+                // NOTE: .getUTCMonth is a zero-based value so we add 1.
                 newTask.scheduledDate = moment(`${date.getUTCFullYear()}-${date.getUTCMonth()+1}-${date.getUTCDate()}`);
                 tasks.push(newTask); // OK, because everything will get re-order right after.
               }
