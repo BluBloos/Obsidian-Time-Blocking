@@ -107,6 +107,7 @@ plugin from source_ to use it.
 ### Build Steps
 
 First, build the Tasks plugin fork and install that into your vault.
+Use this specific commit hash: https://github.com/BluBloos/obsidian-tasks-fork/commit/b03b8c89b442666817a2004976c17c3e32882bb0
 
 Then, build and install this plugin.
 
