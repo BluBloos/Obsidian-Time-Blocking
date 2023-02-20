@@ -102,7 +102,7 @@ tags do not include #someday
 
 ## Okay, cool, how do I use this?
 
-In it's current form, this plugin is best for developers. The documentation is minimal and you will need to _build this
+In its current form, this plugin is best for developers. The documentation is minimal and you will need to _build this
 plugin from source_ to use it.
 
 ### Build Steps
