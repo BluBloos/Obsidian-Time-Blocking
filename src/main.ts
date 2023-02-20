@@ -555,8 +555,8 @@ export class ScheduleWriter {
             const NOON = MIN_PER_HOUR * 12;
             const nullVal = null;
             return {
-              scheduleBegin: NOON + MIN_PER_HOUR * 5,
-              scheduleEnd: NOON + MIN_PER_HOUR * 9,
+              scheduleBegin: MIN_PER_HOUR * 9,
+              scheduleEnd: NOON + MIN_PER_HOUR * 5,
               viewBegin: nullVal,
               viewEnd: nullVal,
               maxBlockSize: 90,
