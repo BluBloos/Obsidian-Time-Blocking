@@ -107,6 +107,24 @@ class LivePreviewExtension implements PluginValue {
                 event.preventDefault();
                 const taskFromTarget = this.getTaskFromTarget(target);
                 const task = taskFromTarget.task;
+
+                // support for long tasks (ones where the estimated time to complete is larger than max block size).
+                const estimatedTimeToComplete = task?.estimatedTimeToComplete;
+                const blockDuration = taskFromTarget.block?.duration;
+                if (estimatedTimeToComplete && blockDuration) {
+                    if (estimatedTimeToComplete > blockDuration) {
+                        const newTimeToComplete = estimatedTimeToComplete - blockDuration;
+                        const newTask = new TaskExternal({
+                            ...task,
+                            estimatedTimeToComplete: newTimeToComplete,
+                        });
+                        this.editTask(newTask, (plugin:any, Task : any) : Promise<void> => {
+                            return plugin.editTaskWithModal(Task);
+                        });
+                        return true;
+                    }
+                }
+
                 if (task) {
                     this.toggleTask(task);
                 }
