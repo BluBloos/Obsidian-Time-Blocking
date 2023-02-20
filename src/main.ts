@@ -768,7 +768,8 @@ export default class ObsidianTimeBlocking extends Plugin {
   // TODO: make not public. bad design.
   public scheduleWriter: ScheduleWriter;
 
-  async unload(): Promise<void> {
+  async onunload(): Promise<void> {
+    console.log("unloading Obsidian-Time-Blocking plugin...");
     this.app.workspace.off("active-leaf-change", (leaf: WorkspaceLeaf) => {});
   }
 
