@@ -571,7 +571,6 @@ export class ScheduleWriter {
 `not done 
 `,
               descriptionFilter: (description) => {
-                const cruftRemoved = description.replace("[[TODO]](Noah):", "");
                 const tagsBettered = cruftRemoved.replace(/#([a-zA-Z0-9]+)/g, (match) => {
                   return `**${match}**`;
                 });
