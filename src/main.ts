@@ -866,6 +866,7 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
 
 // ------------- POST MVP -------------
 
+// TODO: Mobile is broken af - fix that.
 
 // TODO: fix bug where multiple settings tabs are created.
 
