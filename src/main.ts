@@ -569,10 +569,6 @@ export class ScheduleWriter {
               },
               query:
 `not done 
-description includes TODO 
-path does not include TODO Template
-path does not include Weekly Journal Template
-tags do not include #someday
 `,
               descriptionFilter: (description) => {
                 const cruftRemoved = description.replace("[[TODO]](Noah):", "");
