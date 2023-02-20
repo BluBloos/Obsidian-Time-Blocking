@@ -487,7 +487,7 @@ export class ScheduleWriter {
           const textAfterPostambleEof = textAfter[1];
 
           // get the schedule settings from postamble bit.
-          const settingsRegex = /^\s*```javascript([\s\S]*)```/u; // u is for unicode.
+          const settingsRegex = /^\s*```javascript([\s\S]*?)(```)/u; // u is for unicode.
           const settingsMatch = textAfterPostambleEof.match(settingsRegex);
           const generateSettingsFuncString = settingsMatch ? settingsMatch[1] : "";
           
