@@ -98,6 +98,7 @@ tags do not include #someday
 - There exists the scheduleBegin/End, and the schedule view.
 - The begin/End is the region of time _during a single day_ that tasks may be scheduled.
 - The viewBegin/End is some (Begin, End] _range of days_ which tasks can be scheduled.
+- To update the schedule _click on any other Ob leaf_ then back to the leaf with the schedule. A leaf for example would be files tab on the left.
 
 ## Okay, cool, how do I use this?
 
