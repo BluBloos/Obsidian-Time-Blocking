@@ -1,23 +1,33 @@
 import {TaskUID, TaskExternal} from './types';
+import { ScheduleBlock } from './main';
 
 import {
     App,
   } from "obsidian";
 
+export class TaskRenderIdxEntry {
+  public uid: TaskUID;
+  public block: ScheduleBlock;
+  constructor(uid: TaskUID, block: ScheduleBlock) {
+    this.uid = uid;
+    this.block = block;
+  }
+}
+
 class TaskRegistry {
   private app: App;
   private static instance: TaskRegistry;
   private tasks: Map<TaskUID, TaskExternal>;
-  private renderIdxToUID: Map<number, TaskUID>;
+  private renderIdxMap: Map<number, TaskRenderIdxEntry>;
 
   private constructor() {
     this.tasks = new Map();
-    this.renderIdxToUID = new Map();
+    this.renderIdxMap = new Map();
   }
 
   public reset() {
     this.tasks = new Map();
-    this.renderIdxToUID = new Map();
+    this.renderIdxMap = new Map();
   }
 
   public static getInstance(): TaskRegistry {
@@ -27,8 +37,8 @@ class TaskRegistry {
     return TaskRegistry.instance;
   }
 
-  public addRenderIdxMapping(idx: number, uid: TaskUID): void {
-    this.renderIdxToUID.set(idx, uid);
+  public addRenderIdxMapping(idx: number, uid: TaskUID, block:ScheduleBlock): void {
+    this.renderIdxMap.set(idx, new TaskRenderIdxEntry(uid, block));
   }
 
   public addTask(task: TaskExternal): void {
@@ -39,8 +49,16 @@ class TaskRegistry {
     return this.tasks.get(uid);
   }
 
+  public getBlockFromRenderIdx(idx: number): ScheduleBlock | undefined {
+    const uid = this.renderIdxMap.get(idx).uid;
+    if (uid) {
+      return this.renderIdxMap.get(idx).block;
+    }
+    return undefined;
+  }
+
   public getTaskFromRenderIdx(idx: number): TaskExternal | undefined {
-    const uid = this.renderIdxToUID.get(idx);
+    const uid = this.renderIdxMap.get(idx).uid;
     if (uid) {
       return this.getTask(uid);
     }

@@ -71,7 +71,7 @@ class LivePreviewExtension implements PluginValue {
         });
     }
 
-    private getTaskFromTarget(target:any) : TaskExternal {
+    private getTaskFromTarget(target:any) : any {
         // get line that was clicked.
         const { state } = this.view;
         const position = this.view.posAtDOM(target);
@@ -79,7 +79,10 @@ class LivePreviewExtension implements PluginValue {
         console.log("line", line);
         const regex = new RegExp(`${TASK_SYMBOL}(\\d+)`, 'u'); // TODO:make more robust. what if task desc contains this?
         const renderIdx = parseInt(line.text.match(regex)?.[1]??'-1');
-        return taskRegistry.getTaskFromRenderIdx(renderIdx);
+        return {
+            task:taskRegistry.getTaskFromRenderIdx(renderIdx),
+            block:taskRegistry.getBlockFromRenderIdx(renderIdx),
+        };
     }
 
     private handleClickEvent(event: MouseEvent): boolean {
@@ -102,7 +105,8 @@ class LivePreviewExtension implements PluginValue {
                 console.log("Obsidian-Time-Blocking: Clicked on task complete button!");
                 // don't navigate the link.
                 event.preventDefault();
-                let task = this.getTaskFromTarget(target);
+                const taskFromTarget = this.getTaskFromTarget(target);
+                const task = taskFromTarget.task;
                 if (task) {
                     this.toggleTask(task);
                 }
@@ -114,7 +118,8 @@ class LivePreviewExtension implements PluginValue {
                 console.log("Obsidian-Time-Blocking: Clicked on task edit button!");
                 // don't navigate the link.
                 event.preventDefault();
-                let task = this.getTaskFromTarget(target);
+                const taskFromTarget = this.getTaskFromTarget(target);
+                const task = taskFromTarget.task;
                 if (task) {
                     this.editTask(task, (plugin:any, Task : any) : Promise<void> => {
                         return plugin.editTaskWithModal(Task);

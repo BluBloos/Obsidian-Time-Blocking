@@ -75,7 +75,7 @@ enum ScheduleBlockType {
 /// this class is a block that the ScheduleAlogrithm outputs.
 /// it is meant to be consumed by the ScheduleWriter for rendering
 /// the schedule.
-class ScheduleBlock {
+export class ScheduleBlock {
   public readonly type: ScheduleBlockType;   // the type of block.
   public readonly text: string;              // the text to be rendered.
   public readonly textBare: string;          // the text to be rendered, without any symbols for the purpose of reflow.
@@ -661,7 +661,7 @@ tags do not include #someday
                 }
                 scheduleOut += renderLineBegin + renderLineTask + "\n\n";
                 if (block.renderIdx >= 0) {
-                  taskRegistry.addRenderIdxMapping(block.renderIdx, block.taskUID);
+                  taskRegistry.addRenderIdxMapping(block.renderIdx, block.taskUID, block);
                 }
                 break;
               case ScheduleBlockType.DATE_HEADER:
