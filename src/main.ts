@@ -197,6 +197,20 @@ class Schedule {
   }
 }
 
+// Sort just a filtered part of an array then "merge" it back into the original array.
+// this does in place for the array.
+function filterSort( array:any[], filterFn: (a:any) => boolean, sortFn: (a:any, b:any) => number ) {
+  // pass 2.
+  let filtered = array.filter(filterFn);
+  filtered.sort( sortFn);
+  // merge filteredTasks back in.
+  for (let i = 0, Idx = 0; Idx < array.length; Idx++) {
+    if (filtered.includes(array[Idx])) {
+      array[Idx] = filtered[i++];
+    }
+  }
+}
+
 class ScheduleAlgorithm {
 
   private readonly settings : ScheduleSettings;
@@ -367,7 +381,27 @@ class ScheduleAlgorithm {
         }
         i++;
       }
-      biasedTasks.sort((a,b) => {
+     tasks = biasedTasks.concat(tasks);
+    }
+
+    // pass 2 sort.
+    {
+      filterSort(tasks, (a) => {
+        return !!getTaskStartDate(a);
+      }, (a,b) => {
+        let aEarliestStart = getTaskStartDate(a);
+        let bEarliestStart = getTaskStartDate(b);
+        return aEarliestStart.isAfter(bEarliestStart, 'D') ? 1 :
+          (aEarliestStart.isSame(bEarliestStart, 'D') ? 0 : -1);
+      });
+    }
+
+    // TODO: there are quite a few sorts going on ... can we reduce them?
+    // pass 3 sort.
+    {
+      filterSort(tasks, (a) => {
+        return !!a.startTime;
+      }, (a,b) => {
         let aEarliestStart = getTaskStartDate(a);
         let bEarliestStart = getTaskStartDate(b);
         if (aEarliestStart && bEarliestStart) {
@@ -377,7 +411,6 @@ class ScheduleAlgorithm {
         }
         return 0;
       });
-     tasks = biasedTasks.concat(tasks);
     }
 
     console.log("tasks pre-blocking", tasks);
@@ -454,20 +487,6 @@ class ScheduleAlgorithm {
     });
   }
 
-}
-
-// Sort just a filtered part of an array then "merge" it back into the original array.
-// this does in place for the array.
-function filterSort( array:any[], filterFn: (a:any) => boolean, sortFn: (a:any, b:any) => number ) {
-  // pass 2.
-  let filtered = array.filter(filterFn);
-  filtered.sort( sortFn);
-  // merge filteredTasks back in.
-  for (let i = 0, Idx = 0; Idx < array.length; Idx++) {
-    if (filtered.includes(array[Idx])) {
-      array[Idx] = filtered[i++];
-    }
-  }
 }
 
 export class ScheduleWriter {
@@ -574,19 +593,6 @@ tags do not include #someday
                   // 0 means leave a and b unchanged
                   return priorityAlgo(a) - priorityAlgo(b);
                 });
-                // pass 2.
-                filterSort(tasks, (task) => {
-                  return !!getTaskStartDate(task);
-                }, (a, b) => {
-                  let aEarliestStart = getTaskStartDate(a);
-                  let bEarliestStart = getTaskStartDate(b);
-                  let result = 0;
-                  if (aEarliestStart && bEarliestStart) {
-                    result = aEarliestStart.isAfter(bEarliestStart, 'D') ? 1 :
-                    (aEarliestStart.isSame(bEarliestStart, 'D') ? 0 : -1);
-                  }
-                  return result;
-                });                
               }
             };
           }
