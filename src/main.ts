@@ -866,6 +866,9 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
 
 // ------------- POST MVP -------------
 
+
+// TODO: fix bug where multiple settings tabs are created.
+
 // TODO: add a blacklist setting for files that we ignore any timeblocking sections.
 
 // TODO: maybe add ability to make tasks dependent on each other.
