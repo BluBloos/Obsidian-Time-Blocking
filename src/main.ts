@@ -446,6 +446,20 @@ class ScheduleAlgorithm {
 
 }
 
+// Sort just a filtered part of an array then "merge" it back into the original array.
+// this does in place for the array.
+function filterSort( array:any[], filterFn: (a:any) => boolean, sortFn: (a:any, b:any) => number ) {
+  // pass 2.
+  let filtered = array.filter(filterFn);
+  filtered.sort( sortFn);
+  // merge filteredTasks back in.
+  for (let i = 0, Idx = 0; Idx < array.length; Idx++) {
+    if (filtered.includes(array[Idx])) {
+      array[Idx] = filtered[i++];
+    }
+  }
+}
+
 export class ScheduleWriter {
 
   private app: App;
@@ -502,7 +516,7 @@ export class ScheduleWriter {
           const settingsMatch = textAfterPostambleEof.match(settingsRegex);
           const generateSettingsFuncString = settingsMatch ? settingsMatch[1] : "";
           
-          const generateSettingsFunDefault = (moment: any, getTaskStartDate: any) => {
+          const generateSettingsFunDefault = (moment: any, getTaskStartDate: any, filterSort: any) => {
             const MIN_PER_HOUR = 60;
             const NOON = MIN_PER_HOUR * 12;
             return {
@@ -551,10 +565,9 @@ tags do not include #someday
                   return priorityAlgo(a) - priorityAlgo(b);
                 });
                 // pass 2.
-                let filteredTasks = tasks.filter((task) => {
+                filterSort(tasks, (task) => {
                   return !!getTaskStartDate(task);
-                });
-                filteredTasks.sort( (a, b) => {
+                }, (a, b) => {
                   let aEarliestStart = getTaskStartDate(a);
                   let bEarliestStart = getTaskStartDate(b);
                   let result = 0;
@@ -563,21 +576,15 @@ tags do not include #someday
                     (aEarliestStart.isSame(bEarliestStart, 'D') ? 0 : -1);
                   }
                   return result;
-                });
-                // merge filteredTasks back in.
-                for (let i = 0, Idx = 0; Idx < tasks.length; Idx++) {
-                  if (filteredTasks.includes(tasks[Idx])) {
-                    tasks[Idx] = filteredTasks[i++];
-                  }
-                }
+                });                
               }
             };
           }
           
           const generateSettingsFun = generateSettingsFuncString ? new Function('moment', 'getTaskStartDate', generateSettingsFuncString) :
             generateSettingsFunDefault;
-          const settingsObj : ScheduleSettings = generateSettingsFun(moment, getTaskStartDate);
-          const settingsObjDefault : ScheduleSettings = generateSettingsFunDefault(moment, getTaskStartDate);
+          const settingsObj : ScheduleSettings = generateSettingsFun(moment, getTaskStartDate, filterSort);
+          const settingsObjDefault : ScheduleSettings = generateSettingsFunDefault(moment, getTaskStartDate, filterSort);
 
           // for those settings that are missing in settingsObj, fill in the gaps using the default settings obj.
           // TODO: can we remove these ignores?
