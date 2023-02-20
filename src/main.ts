@@ -777,9 +777,8 @@ export default class ObsidianTimeBlocking extends Plugin {
 
     this.scheduleWriter = new ScheduleWriter(this.app);
 
-    await this.loadSettings();
-
-    this.addSettingTab(new ObsidianTimeBlockingSettingTab(this.app, this));
+    //await this.loadSettings();
+    //this.addSettingTab(new ObsidianTimeBlockingSettingTab(this.app, this));
 
     // this is where the main logic of the plugin goes.
     this.registerEvent(
