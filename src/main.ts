@@ -373,7 +373,7 @@ class ScheduleAlgorithm {
     console.log("tasks pre-blocking", tasks);
     // USER GETS TO DO A CUSTOM SORTING OF TASKS.
     let taskStack : TaskExternal[] = [];
-    let shouldNotDefer = (task: TaskExternal) => {      
+    let shouldNotDefer = (task: TaskExternal) => {
       let taskStartDate = getTaskStartDate(task);
       const shouldDeferByStartDate = taskStartDate ?
         taskStartDate.isAfter(dateCursor, "day") : false;
@@ -397,14 +397,14 @@ class ScheduleAlgorithm {
           // insert this task into the schedule.
           // TODO: investigate if this works in odd cases where for example
           // the user says to schedule tasks within the full 24h slot.
-          if (task.startDate) {
+          if (getTaskStartDate(task)) {
             timeCursor = getTaskStartDate(task).diff(dateCursor, "minutes");
+            checkBoundary(); // we may be on new date now, check.
           }
-          checkBoundary(); // we may be on new date now, check.
           if (task.startTime) {
             timeCursor += Math.max(0,task.startTime - timeCursor);
+            checkBoundary(); // if they wrote a startTime that kicks us out boundary...
           }
-          checkBoundary(); // if they wrote a startTime that kicks us out boundary...
         } else {
           taskStack.push(task);
           taskIdx++;
