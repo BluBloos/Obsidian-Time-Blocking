@@ -127,8 +127,8 @@ function VISIBLE_COUNT(str:string) {
 class ScheduleSettings {
   public readonly scheduleBegin : number;// = NOON + MIN_PER_HOUR * 5;
   public readonly scheduleEnd : number;//   = NOON + MIN_PER_HOUR * 9;
-  public readonly viewBegin:string;// = "2023-02-04";  // begin is inclusive
-  public readonly viewEnd:string;// =   "2023-12-30";  //< the end is exclusive (date granularity)
+  public readonly viewBegin:string|null;     // = "2023-02-04";  // begin is inclusive
+  public viewEnd:string|null;     // =   "2023-12-30";  //< the end is exclusive (date granularity)
   public readonly maxBlockSize : number;// = 90;  // the unit for these three is always minutes.
   public readonly minBlockSize : number;// = 15;
   public readonly blockStepSize : number;// = 5;  //< I always want blocks to be divisible by 5 mins. this is
@@ -159,8 +159,8 @@ class ScheduleSettings {
   } : {
     scheduleBegin : number,
     scheduleEnd : number,
-    viewBegin:string,
-    viewEnd:string,
+    viewBegin:string|null,
+    viewEnd:string|null,
     maxBlockSize : number,
     minBlockSize : number,
     blockStepSize : number,
@@ -235,7 +235,12 @@ class ScheduleAlgorithm {
     // TODO: We need to add to the tasks plugin another piece of metadata for estimated time to complete.
     // This will be part of our priv extension.
     let timeNow = moment();
-    const virtualToday = getLaterOfTwoDates(moment(timeNow.format("YYYY-MM-DD")), moment(this.settings.viewBegin));
+    const virtualToday = getLaterOfTwoDates(moment(timeNow.format("YYYY-MM-DD")),
+      this.settings.viewBegin ? moment(this.settings.viewBegin) : null);
+    if (!this.settings.viewEnd) {
+      this.settings.viewEnd = moment(virtualToday).add(1, 'd').format("YYYY-MM-DD"); // TODO: this seems kinda redundant cuz we
+      // end up parsing it later anyway ...
+    }
 
     let alignUp = (from: number, alignment: number) => {
       return Math.ceil(from / alignment) * alignment;
@@ -548,11 +553,12 @@ export class ScheduleWriter {
           const generateSettingsFunDefault = (moment: any, getTaskStartDate: any, filterSort: any) => {
             const MIN_PER_HOUR = 60;
             const NOON = MIN_PER_HOUR * 12;
+            const nullVal = null;
             return {
               scheduleBegin: NOON + MIN_PER_HOUR * 5,
               scheduleEnd: NOON + MIN_PER_HOUR * 9,
-              viewBegin: "2023-02-04",
-              viewEnd: "2023-12-30",
+              viewBegin: nullVal,
+              viewEnd: nullVal,
               maxBlockSize: 90,
               minBlockSize: 15,
               blockStepSize: 5,
