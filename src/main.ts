@@ -366,7 +366,17 @@ class ScheduleAlgorithm {
           continue;
         }
         i++;
-     }
+      }
+      biasedTasks.sort((a,b) => {
+        let aEarliestStart = getTaskStartDate(a);
+        let bEarliestStart = getTaskStartDate(b);
+        if (aEarliestStart && bEarliestStart) {
+          if (aEarliestStart.isSame(bEarliestStart, 'D')) {
+           return a.startTime - b.startTime;
+          }
+        }
+        return 0;
+      });
      tasks = biasedTasks.concat(tasks);
     }
 
