@@ -1,6 +1,8 @@
 # Obsidian-Time-Blocking
 The official time blocking plugin for Obsidian.
 
+<img width="662" alt="Screen Shot 2023-02-20 at 1 21 00 PM" src="https://user-images.githubusercontent.com/38915815/220177564-19cdcae3-9b1a-42cf-aafe-f77b2221e458.png">
+
 ## What does this plugin do for me?
 
 - **Integrates with Tasks plugin. https://obsidian-tasks-group.github.io/obsidian-tasks/.**
