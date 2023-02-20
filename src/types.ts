@@ -32,6 +32,9 @@ export class TaskExternal {
                                                                          ///  null if the RRule itself has a ref date,
                                                                          ///  ex) "every Monday".
   
+    // NOTE: This piece of a data is not coming from Tasks. patched in at a later time.
+    public startTime: number | null;                            // the high granularity time at which the task is scheduled to start.
+
     constructor({
       isDone,
       priority,
@@ -74,6 +77,7 @@ export class TaskExternal {
       this.recurrenceRrule = recurrenceRrule;
       this.recurrenceReferenceDate = CREATE_MOMENT_LOCAL(recurrenceReferenceDate);
       this.uid = uid;
+      this.startTime = null;
     }
   
   }

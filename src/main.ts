@@ -8,33 +8,12 @@ import TaskRegistry from './TaskRegistry';
 
 import { TASK_SYMBOL, TASK_EDIT_SYMBOL } from './live_preview';
 
-// create the one true taskRegistry :D.
+// create the one true taskRegistry :D (singleton design pattern).
 const taskRegistry = TaskRegistry.getInstance();
 
 // ----------------- MVP: -----------------
-
-// HIGH VALUE TODOs:
-// TODO: mark a task as complete:
-//
-// using TASK_SYMBOL emoji
-// as the button.
-// we'll get the task from the line,
-// then use Task.fromLine to get a Task data structure.
-// then pass that to Tasks and do replaceTaskWithTasks.
-
-// TODO: Add edit task modal button to rendered lines.
-
-
-// BUG FIXES:
-// TODO: Fix UTC delayed thing.
-
-// SMOL:
-// TODO: Add user preference for schedule short tasks first.
-// TODO: add priority (the native Tasks kind) into the mix.
-
 // QOL + TASKS PLUGIN MODS:
 // TODO: Verify that we have fixed file overwrite thing.
-
 // ----------------- MVP: -----------------
 
 const LOCK_SYMBOL: string = "🔒";
@@ -156,6 +135,7 @@ class ScheduleSettings {
                                       //  also an implicit alignment for task begin.
   public readonly defaultBlockSize : number;//= 30;
   public readonly padding : number;
+  public readonly assignTaskBias : (task:TaskExternal) => number;
   public readonly scheduleAlgo : (tasks : TaskExternal[]) => void;
   public readonly descriptionFilter : (description: string) => string;
   public readonly query : string;
@@ -172,6 +152,7 @@ class ScheduleSettings {
     blockStepSize,
     defaultBlockSize,
     padding,
+    assignTaskBias,
     scheduleAlgo,
     descriptionFilter,
     query
@@ -185,6 +166,7 @@ class ScheduleSettings {
     blockStepSize : number,
     defaultBlockSize : number,
     padding : number,
+    assignTaskBias : (task:TaskExternal) => number,
     scheduleAlgo : (tasks : TaskExternal[]) => void,
     descriptionFilter : (description: string) => string,
     query : string
@@ -198,6 +180,7 @@ class ScheduleSettings {
     this.blockStepSize = blockStepSize;
     this.defaultBlockSize = defaultBlockSize;
     this.padding = padding;
+    this.assignTaskBias = assignTaskBias;
     this.scheduleAlgo = scheduleAlgo;
     this.descriptionFilter = descriptionFilter;
     this.query = query;
@@ -352,12 +335,13 @@ class ScheduleAlgorithm {
                 newTask.scheduledDate = moment(`${date.getUTCFullYear()}-${date.getUTCMonth()+1}-${date.getUTCDate()}`);
                 tasks.push(newTask); // OK, because everything will get re-order right after.
               }
+              continue; // don't increment i so as to land on next task which is now in slot just deleted.
             } else {
               // TODO:
               console.error("something is wrong");
             }
           }          
-          continue; // don't increment i so as to land on next task which is now in slot just deleted.
+          
         } else {
           tasks[i] = new TaskExternal({...task}); // clone to convert from local to UTC.
           taskRegistry.addTask(tasks[i]);
@@ -367,13 +351,34 @@ class ScheduleAlgorithm {
     }
     // USER GETS TO DO A CUSTOM SORTING OF TASKS.
     this.settings.scheduleAlgo(tasks); // WORKS IN PLACE.
+
+    // use the user settings to bias tasks for starting at a very specific time.
+    {
+      let IterCount = tasks.length;
+      const biasedTasks = [];
+      for (let i = 0, Idx = 0; Idx < IterCount; Idx++ ) {
+        let task : TaskExternal = tasks[i];
+        const bias = this.settings.assignTaskBias(task);
+        if (bias) {
+          task.startTime = bias;
+          tasks.splice(i, 1); // we want to remove this particular task from the array.
+          biasedTasks.push(task);
+          continue;
+        }
+        i++;
+     }
+     tasks = biasedTasks.concat(tasks);
+    }
+
     console.log("tasks pre-blocking", tasks);
     // USER GETS TO DO A CUSTOM SORTING OF TASKS.
     let taskStack : TaskExternal[] = [];
     let shouldNotDefer = (task: TaskExternal) => {      
       let taskStartDate = getTaskStartDate(task);
-      return taskStartDate ?
-        !taskStartDate.isAfter(dateCursor, "day") : true;
+      const shouldDeferByStartDate = taskStartDate ?
+        taskStartDate.isAfter(dateCursor, "day") : false;
+      const shouldDeferByStartTime = task.startTime ? (task.startTime > timeCursor) : false;
+      return !(shouldDeferByStartDate || shouldDeferByStartTime);
     }
     let taskIdx = 0;
     while ( (taskIdx < tasks.length) || (taskStack.length > 0) ) {
@@ -392,8 +397,14 @@ class ScheduleAlgorithm {
           // insert this task into the schedule.
           // TODO: investigate if this works in odd cases where for example
           // the user says to schedule tasks within the full 24h slot.
-          timeCursor = getTaskStartDate(task).diff(dateCursor, "minutes");
-          checkBoundary();
+          if (task.startDate) {
+            timeCursor = getTaskStartDate(task).diff(dateCursor, "minutes");
+          }
+          checkBoundary(); // we may be on new date now, check.
+          if (task.startTime) {
+            timeCursor += Math.max(0,task.startTime - timeCursor);
+          }
+          checkBoundary(); // if they wrote a startTime that kicks us out boundary...
         } else {
           taskStack.push(task);
           taskIdx++;
@@ -504,6 +515,9 @@ export class ScheduleWriter {
               blockStepSize: 5,
               defaultBlockSize: 30,
               padding: 15,
+              assignTaskBias: (task) => {
+                return null;
+              },
               query:
 `not done 
 description includes TODO 
@@ -828,6 +842,8 @@ class ObsidianTimeBlockingSettingTab extends PluginSettingTab {
 */
 
 // ------------- POST MVP -------------
+
+// TODO: add a blacklist setting for files that we ignore any timeblocking sections.
 
 // TODO: maybe add ability to make tasks dependent on each other.
 
